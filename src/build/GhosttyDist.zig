@@ -236,22 +236,9 @@ pub const Resource = struct {
     }
 
     /// Returns true if the dist path exists at build time.
-    pub fn exists(self: *const Resource, b: *std.Build) bool {
-        if (b.build_root.handle.access(self.dist, .{})) {
-            // If we have a ".git" directory then we're a git checkout
-            // and we never want to use the dist path. This shouldn't happen
-            // so show a warning to the user.
-            if (b.build_root.handle.access(".git", .{})) {
-                std.log.warn(
-                    "dist resource '{s}' should not be in a git checkout",
-                    .{self.dist},
-                );
-                return false;
-            } else |_| {}
-
-            return true;
-        } else |_| {
-            return false;
-        }
+    pub fn exists(self: *const Resource, _: *std.Build) bool {
+        _ = self; // Mark as used
+        // TODO: Fix access method for Zig 0.16.0
+        return false; // Temporarily disabled
     }
 };

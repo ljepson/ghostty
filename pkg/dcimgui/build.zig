@@ -25,14 +25,14 @@ pub fn build(b: *std.Build) !void {
         }),
         .linkage = .static,
     });
-    lib.linkLibC();
+    
     // On MSVC, we must not use linkLibCpp because Zig unconditionally
     // passes -nostdinc++ and then adds its bundled libc++/libc++abi
     // include paths, which conflict with MSVC's own C++ runtime headers.
     // The MSVC SDK include directories (added via linkLibC) contain
     // both C and C++ headers, so linkLibCpp is not needed.
     if (target.result.abi != .msvc) {
-        lib.linkLibCpp();
+        
     }
     b.installArtifact(lib);
 
@@ -87,18 +87,17 @@ pub fn build(b: *std.Build) !void {
 
     // Add the core Dear Imgui source files
     if (b.lazyDependency("imgui", .{})) |upstream| {
-        lib.addIncludePath(upstream.path(""));
-        lib.addCSourceFiles(.{
-            .root = upstream.path(""),
-            .files = &.{
+        lib.root_module.addIncludePath(upstream.path(""));
+        const imgui_files = &.{
                 "imgui_demo.cpp",
                 "imgui_draw.cpp",
                 "imgui_tables.cpp",
                 "imgui_widgets.cpp",
                 "imgui.cpp",
-            },
-            .flags = flags.items,
-        });
+            };
+        inline for (imgui_files) |file| {
+            lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+        }
 
         lib.installHeadersDirectory(
             upstream.path(""),
@@ -107,20 +106,20 @@ pub fn build(b: *std.Build) !void {
         );
 
         if (freetype) {
-            lib.addCSourceFile(.{
+            lib.root_module.addCSourceFile(.{
                 .file = upstream.path("misc/freetype/imgui_freetype.cpp"),
                 .flags = flags.items,
             });
 
             if (b.systemIntegrationOption("freetype", .{})) {
-                lib.linkSystemLibrary2("freetype2", dynamic_link_opts);
+                lib.root_module.linkSystemLibrary("freetype2", dynamic_link_opts);
             } else {
                 const freetype_dep = b.dependency("freetype", .{
                     .target = target,
                     .optimize = optimize,
                     .@"enable-libpng" = true,
                 });
-                lib.linkLibrary(freetype_dep.artifact("freetype"));
+                lib.root_module.linkLibrary(freetype_dep.artifact("freetype"));
                 if (freetype_dep.builder.lazyDependency(
                     "freetype",
                     .{},
@@ -131,11 +130,7 @@ pub fn build(b: *std.Build) !void {
         }
 
         if (backend_metal) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path("backends"),
-                .files = &.{"imgui_impl_metal.mm"},
-                .flags = flags.items,
-            });
+            lib.root_module.addCSourceFile(.{ .file = upstream.path("backends/imgui_impl_metal.mm"), .flags = flags.items });
             lib.installHeadersDirectory(
                 upstream.path("backends"),
                 "",
@@ -143,11 +138,7 @@ pub fn build(b: *std.Build) !void {
             );
         }
         if (backend_osx) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path("backends"),
-                .files = &.{"imgui_impl_osx.mm"},
-                .flags = flags.items,
-            });
+            lib.root_module.addCSourceFile(.{ .file = upstream.path("backends/imgui_impl_osx.mm"), .flags = flags.items });
             lib.installHeadersDirectory(
                 upstream.path("backends"),
                 "",
@@ -155,11 +146,7 @@ pub fn build(b: *std.Build) !void {
             );
         }
         if (backend_opengl3) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path("backends"),
-                .files = &.{"imgui_impl_opengl3.cpp"},
-                .flags = flags.items,
-            });
+            lib.root_module.addCSourceFile(.{ .file = upstream.path("backends/imgui_impl_opengl3.cpp"), .flags = flags.items });
             lib.installHeadersDirectory(
                 upstream.path("backends"),
                 "",
@@ -170,20 +157,15 @@ pub fn build(b: *std.Build) !void {
 
     // Add the C bindings
     if (b.lazyDependency("bindings", .{})) |upstream| {
-        lib.addIncludePath(upstream.path(""));
-        lib.addCSourceFiles(.{
-            .root = upstream.path(""),
-            .files = &.{
+        lib.root_module.addIncludePath(upstream.path(""));
+        const dcimgui_files = &.{
                 "dcimgui.cpp",
                 "dcimgui_internal.cpp",
-            },
-            .flags = flags.items,
-        });
-        lib.addCSourceFiles(.{
-            .root = b.path(""),
-            .files = &.{"ext.cpp"},
-            .flags = flags.items,
-        });
+            };
+        inline for (dcimgui_files) |file| {
+            lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+        }
+        lib.root_module.addCSourceFile(.{ .file = b.path("ext.cpp"), .flags = flags.items });
 
         lib.installHeadersDirectory(
             upstream.path(""),
@@ -201,7 +183,7 @@ pub fn build(b: *std.Build) !void {
         }),
     });
     test_exe.root_module.addOptions("build_options", options);
-    test_exe.linkLibrary(lib);
+    test_exe.root_module.linkLibrary(lib);
     const tests_run = b.addRunArtifact(test_exe);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&tests_run.step);

@@ -14,15 +14,15 @@ pub fn build(b: *std.Build) !void {
         }),
         .linkage = .static,
     });
-    lib.linkLibC();
+    
 
-    if (upstream_) |upstream| lib.addIncludePath(upstream.path("include"));
-    lib.addIncludePath(b.path("override/include"));
+    if (upstream_) |upstream| lib.root_module.addIncludePath(upstream.path("include"));
+    lib.root_module.addIncludePath(b.path("override/include"));
     if (target.result.os.tag == .windows) {
-        lib.addIncludePath(b.path("override/config/win32"));
-        lib.linkSystemLibrary("ws2_32");
+        lib.root_module.addIncludePath(b.path("override/config/win32"));
+        lib.root_module.linkSystemLibrary("ws2_32", .{});
     } else {
-        lib.addIncludePath(b.path("override/config/posix"));
+        lib.root_module.addIncludePath(b.path("override/config/posix"));
     }
 
     var flags: std.ArrayList([]const u8) = .empty;
@@ -98,11 +98,12 @@ pub fn build(b: *std.Build) !void {
     }
 
     if (upstream_) |upstream| {
-        lib.addCSourceFiles(.{
-            .root = upstream.path(""),
-            .files = srcs,
-            .flags = flags.items,
-        });
+        inline for (srcs) |src_file| {
+            lib.root_module.addCSourceFile(.{ 
+                .file = upstream.path(src_file),
+                .flags = flags.items 
+            });
+        }
 
         lib.installHeader(
             b.path("override/include/libxml/xmlversion.h"),

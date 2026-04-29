@@ -25,7 +25,7 @@ pub fn init(
                 .optimize = .ReleaseFast,
             }),
         });
-        exe.linkLibC();
+        // linkLibC is automatic in Zig 0.16.0
         _ = try deps.add(exe);
         try steps.append(b.allocator, exe);
     }
@@ -41,7 +41,7 @@ pub fn init(
                 .optimize = .ReleaseFast,
             }),
         });
-        exe.linkLibC();
+        // linkLibC is automatic in Zig 0.16.0
         _ = try deps.add(exe);
         try steps.append(b.allocator, exe);
     }

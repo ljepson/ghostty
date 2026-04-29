@@ -52,13 +52,13 @@ fn buildLib(b: *std.Build, module: *std.Build.Module, options: anytype) !*std.Bu
     const upstream = upstream_ orelse return lib;
     const wayland_protocols = wayland_protocols_ orelse return lib;
 
-    lib.linkLibC();
-    lib.addIncludePath(upstream.path("include"));
-    lib.addIncludePath(upstream.path("src"));
+    
+    lib.root_module.addIncludePath(upstream.path("include"));
+    lib.root_module.addIncludePath(upstream.path("src"));
     module.addIncludePath(upstream.path("include"));
 
     // GTK
-    lib.linkSystemLibrary2("gtk4", dynamic_link_opts);
+    lib.root_module.linkSystemLibrary("gtk4", .{});
 
     // Wayland headers and source files
     {
@@ -92,9 +92,9 @@ fn buildLib(b: *std.Build, module: *std.Build.Module, options: anytype) !*std.Bu
             const source_scanner = b.addSystemCommand(&.{ "wayland-scanner", "private-code" });
             source_scanner.addFileArg(xml);
             const source = source_scanner.addOutputFileArg(b.fmt("{s}.c", .{name}));
-            lib.addCSourceFile(.{ .file = source });
+            lib.root_module.addCSourceFile(.{ .file = source });
         }
-        lib.addIncludePath(wf.getDirectory());
+        lib.root_module.addIncludePath(wf.getDirectory());
     }
 
     lib.installHeadersDirectory(
@@ -113,15 +113,16 @@ fn buildLib(b: *std.Build, module: *std.Build.Module, options: anytype) !*std.Bu
         "stubbed-surface.c",
         "xdg-surface-server.c",
     };
-    lib.addCSourceFiles(.{
-        .root = upstream.path("src"),
-        .files = srcs,
-        .flags = &.{
-            b.fmt("-DGTK_LAYER_SHELL_MAJOR={}", .{lib_version.major}),
-            b.fmt("-DGTK_LAYER_SHELL_MINOR={}", .{lib_version.minor}),
-            b.fmt("-DGTK_LAYER_SHELL_MICRO={}", .{lib_version.patch}),
-        },
-    });
+    for (srcs) |src_file| {
+        lib.root_module.addCSourceFile(.{
+            .file = upstream.path("src").path(b, src_file),
+            .flags = &.{
+                b.fmt("-DGTK_LAYER_SHELL_MAJOR={}", .{lib_version.major}),
+                b.fmt("-DGTK_LAYER_SHELL_MINOR={}", .{lib_version.minor}),
+                b.fmt("-DGTK_LAYER_SHELL_MICRO={}", .{lib_version.patch}),
+            },
+        });
+    }
 
     return lib;
 }

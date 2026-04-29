@@ -50,7 +50,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
     switch (cfg.target.result.os.tag) {
         .windows => {
             exe.subsystem = .Windows;
-            exe.addWin32ResourceFile(.{
+            exe.root_module.addWin32ResourceFile(.{
                 .file = b.path("dist/windows/ghostty.rc"),
             });
         },
@@ -84,8 +84,8 @@ fn checkNixShell(exe: *std.Build.Step.Compile, cfg: *const Config) !void {
     if (!cfg.target.query.isNativeCpu()) return;
     if (!cfg.target.query.isNativeOs()) return;
 
-    // Verify we're in NixOS
-    std.fs.accessAbsolute("/etc/NIXOS", .{}) catch return;
+    // Verify we're in NixOS by checking for NIX_PATH environment variable
+    if (cfg.env.get("NIX_PATH") == null) return;
 
     // If we're in a nix shell, not a problem
     if (cfg.env.get("IN_NIX_SHELL") != null) return;

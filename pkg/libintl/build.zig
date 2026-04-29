@@ -38,8 +38,8 @@ pub fn build(b: *std.Build) !void {
             }),
             .linkage = .static,
         });
-        lib.linkLibC();
-        lib.addIncludePath(b.path(""));
+        
+        lib.root_module.addIncludePath(b.path(""));
 
         if (target.result.os.tag.isDarwin()) {
             const apple_sdk = @import("apple_sdk");
@@ -47,13 +47,11 @@ pub fn build(b: *std.Build) !void {
         }
 
         if (b.lazyDependency("gettext", .{})) |upstream| {
-            lib.addIncludePath(upstream.path("gettext-runtime/intl"));
-            lib.addIncludePath(upstream.path("gettext-runtime/intl/gnulib-lib"));
-            lib.addCSourceFiles(.{
-                .root = upstream.path("gettext-runtime/intl"),
-                .files = srcs,
-                .flags = flags.items,
-            });
+            lib.root_module.addIncludePath(upstream.path("gettext-runtime/intl"));
+            lib.root_module.addIncludePath(upstream.path("gettext-runtime/intl/gnulib-lib"));
+            inline for (srcs) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path("gettext-runtime/intl/" ++ file), .flags = flags.items });
+            }
         }
 
         lib.installHeader(b.path("libintl.h"), "libintl.h");

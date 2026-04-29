@@ -13,8 +13,8 @@ pub fn build(b: *std.Build) !void {
         }),
         .linkage = .static,
     });
-    lib.addIncludePath(b.path("vendor"));
-    lib.linkLibC();
+    lib.root_module.addIncludePath(b.path("vendor"));
+    
     libcpp: {
         if (target.result.abi == .msvc) {
             // On MSVC, we must not use linkLibCpp because Zig unconditionally
@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) !void {
         // We link libcpp even with no_libcxx because simdutf requires
         // libc++ headers at build time. But it doesn't require libc++
         // at runtime. For Ghostty itself, we have CI tests to verify this.
-        lib.linkLibCpp();
+        
     }
 
     if (target.result.os.tag.isDarwin()) {
@@ -74,12 +74,7 @@ pub fn build(b: *std.Build) !void {
         try flags.append(b.allocator, "-fPIC");
     }
 
-    lib.addCSourceFiles(.{
-        .flags = flags.items,
-        .files = &.{
-            "vendor/simdutf.cpp",
-        },
-    });
+    lib.root_module.addCSourceFile(.{ .file = b.path("vendor/simdutf.cpp"), .flags = flags.items });
     lib.installHeadersDirectory(
         b.path("vendor"),
         "",

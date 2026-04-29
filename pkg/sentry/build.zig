@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
         }),
         .linkage = .static,
     });
-    lib.linkLibC();
+    
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
@@ -46,75 +46,47 @@ pub fn build(b: *std.Build) !void {
 
     if (b.lazyDependency("sentry", .{})) |upstream| {
         module.addIncludePath(upstream.path("include"));
-        lib.addIncludePath(upstream.path("include"));
-        lib.addIncludePath(upstream.path("src"));
-        lib.addCSourceFiles(.{
-            .root = upstream.path(""),
-            .files = srcs,
-            .flags = flags.items,
-        });
+        lib.root_module.addIncludePath(upstream.path("include"));
+        lib.root_module.addIncludePath(upstream.path("src"));
+        inline for (srcs) |file| {
+            lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+        }
 
         // Linux-only
         if (target.result.os.tag == .linux) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "vendor/stb_sprintf.c",
-                },
-                .flags = flags.items,
-            });
+            lib.root_module.addCSourceFile(.{ .file = upstream.path("vendor/stb_sprintf.c"), .flags = flags.items });
         }
 
         // Symbolizer + Unwinder
         if (target.result.os.tag == .windows) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
+            const windows_files = &.{
                     "src/sentry_windows_dbghelp.c",
                     "src/path/sentry_path_windows.c",
                     "src/symbolizer/sentry_symbolizer_windows.c",
                     "src/unwinder/sentry_unwinder_dbghelp.c",
-                },
-                .flags = flags.items,
-            });
+                };
+            inline for (windows_files) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+            }
         } else {
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
+            const unix_files = &.{
                     "src/sentry_unix_pageallocator.c",
                     "src/path/sentry_path_unix.c",
                     "src/symbolizer/sentry_symbolizer_unix.c",
                     "src/unwinder/sentry_unwinder_libbacktrace.c",
-                },
-                .flags = flags.items,
-            });
+                };
+            inline for (unix_files) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+            }
         }
 
         // Module finder
         switch (target.result.os.tag) {
-            .windows => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/modulefinder/sentry_modulefinder_windows.c",
-                },
-                .flags = flags.items,
-            }),
+            .windows => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/modulefinder/sentry_modulefinder_windows.c"), .flags = flags.items }),
 
-            .macos, .ios => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/modulefinder/sentry_modulefinder_apple.c",
-                },
-                .flags = flags.items,
-            }),
+            .macos, .ios => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/modulefinder/sentry_modulefinder_apple.c"), .flags = flags.items }),
 
-            .linux => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/modulefinder/sentry_modulefinder_linux.c",
-                },
-                .flags = flags.items,
-            }),
+            .linux => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/modulefinder/sentry_modulefinder_linux.c"), .flags = flags.items }),
 
             .freestanding => {},
 
@@ -126,77 +98,35 @@ pub fn build(b: *std.Build) !void {
 
         // Transport
         switch (transport) {
-            .curl => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/transports/sentry_transport_curl.c",
-                },
-                .flags = flags.items,
-            }),
+            .curl => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/transports/sentry_transport_curl.c"), .flags = flags.items }),
 
-            .winhttp => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/transports/sentry_transport_winhttp.c",
-                },
-                .flags = flags.items,
-            }),
+            .winhttp => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/transports/sentry_transport_winhttp.c"), .flags = flags.items }),
 
-            .none => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/transports/sentry_transport_none.c",
-                },
-                .flags = flags.items,
-            }),
+            .none => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/transports/sentry_transport_none.c"), .flags = flags.items }),
         }
 
         // Backend
         switch (backend) {
-            .crashpad => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/backends/sentry_backend_crashpad.cpp",
-                },
-                .flags = flags.items,
-            }),
+            .crashpad => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/backends/sentry_backend_crashpad.cpp"), .flags = flags.items }),
 
             .breakpad => {
-                lib.addCSourceFiles(.{
-                    .root = upstream.path(""),
-                    .files = &.{
-                        "src/backends/sentry_backend_breakpad.cpp",
-                    },
-                    .flags = flags.items,
-                });
+                lib.root_module.addCSourceFile(.{ .file = upstream.path("src/backends/sentry_backend_breakpad.cpp"), .flags = flags.items });
 
                 if (b.lazyDependency("breakpad", .{
                     .target = target,
                     .optimize = optimize,
                 })) |breakpad_dep| {
-                    lib.linkLibrary(breakpad_dep.artifact("breakpad"));
+                    lib.root_module.linkLibrary(breakpad_dep.artifact("breakpad"));
 
                     // We need to add this because Sentry includes some breakpad
                     // headers that include this vendored file...
-                    lib.addIncludePath(breakpad_dep.path("vendor"));
+                    lib.root_module.addIncludePath(breakpad_dep.path("vendor"));
                 }
             },
 
-            .inproc => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/backends/sentry_backend_inproc.c",
-                },
-                .flags = flags.items,
-            }),
+            .inproc => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/backends/sentry_backend_inproc.c"), .flags = flags.items }),
 
-            .none => lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/backends/sentry_backend_none.c",
-                },
-                .flags = flags.items,
-            }),
+            .none => lib.root_module.addCSourceFile(.{ .file = upstream.path("src/backends/sentry_backend_none.c"), .flags = flags.items }),
         }
 
         lib.installHeadersDirectory(

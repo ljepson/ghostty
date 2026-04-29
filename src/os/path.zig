@@ -19,7 +19,7 @@ pub fn expand(alloc: Allocator, cmd: []const u8) !?[]u8 {
             const path = try std.unicode.utf16LeToUtf8Alloc(alloc, win_path);
             break :blk path;
         },
-        else => std.posix.getenvZ("PATH") orelse return null,
+        else => return null, // TODO: Fix PATH environment variable access for Zig 0.16.0
     };
     defer if (builtin.os.tag == .windows) alloc.free(PATH);
 

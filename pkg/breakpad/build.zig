@@ -12,8 +12,8 @@ pub fn build(b: *std.Build) !void {
         }),
         .linkage = .static,
     });
-    lib.linkLibCpp();
-    lib.addIncludePath(b.path("vendor"));
+    // C++ linking is automatic in Zig 0.16.0
+    lib.root_module.addIncludePath(b.path("vendor"));
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
@@ -23,60 +23,46 @@ pub fn build(b: *std.Build) !void {
     defer flags.deinit(b.allocator);
 
     if (b.lazyDependency("breakpad", .{})) |upstream| {
-        lib.addIncludePath(upstream.path("src"));
-        lib.addCSourceFiles(.{
-            .root = upstream.path(""),
-            .files = common,
-            .flags = flags.items,
-        });
+        lib.root_module.addIncludePath(upstream.path("src"));
+        for (common) |file| {
+            lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+        }
 
         if (target.result.os.tag.isDarwin()) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = common_apple,
-                .flags = flags.items,
-            });
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = client_apple,
-                .flags = flags.items,
-            });
+            for (common_apple) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+            }
+            for (client_apple) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+            }
 
             switch (target.result.os.tag) {
                 .macos => {
-                    lib.addCSourceFiles(.{
-                        .root = upstream.path(""),
-                        .files = common_mac,
-                        .flags = flags.items,
-                    });
-                    lib.addCSourceFiles(.{
-                        .root = upstream.path(""),
-                        .files = client_mac,
-                        .flags = flags.items,
-                    });
+                    for (common_mac) |file| {
+                        lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+                    }
+                    for (client_mac) |file| {
+                        lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+                    }
                 },
 
-                .ios => lib.addCSourceFiles(.{
-                    .root = upstream.path(""),
-                    .files = client_ios,
-                    .flags = flags.items,
-                }),
+                .ios => {
+                    for (client_ios) |file| {
+                        lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+                    }
+                },
 
                 else => {},
             }
         }
 
         if (target.result.os.tag == .linux) {
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = common_linux,
-                .flags = flags.items,
-            });
-            lib.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = client_linux,
-                .flags = flags.items,
-            });
+            for (common_linux) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+            }
+            for (client_linux) |file| {
+                lib.root_module.addCSourceFile(.{ .file = upstream.path(file), .flags = flags.items });
+            }
         }
 
         lib.installHeadersDirectory(

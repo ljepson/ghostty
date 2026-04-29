@@ -67,7 +67,7 @@ emit_unicode_table_gen: bool = false,
 is_dep: bool = false,
 
 /// Environmental properties
-env: std.process.EnvMap,
+env: std.hash_map.StringHashMap([]const u8),
 
 pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Config {
     // Setup our standard Zig target and optimize options, i.e.
@@ -125,8 +125,8 @@ pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Conf
     const gtk_targets = gtk.targets(b);
 
     // We use env vars throughout the build so we grab them immediately here.
-    var env = try std.process.getEnvMap(b.allocator);
-    errdefer env.deinit();
+    var env = std.hash_map.StringHashMap([]const u8).init(b.allocator);
+    defer env.deinit();
 
     var config: Config = .{
         .optimize = optimize,
@@ -601,7 +601,7 @@ pub fn baselineTarget(self: *const Config) std.Build.ResolvedTarget {
     // handle the native case.
     return .{
         .query = q,
-        .result = std.zig.system.resolveTargetQuery(q) catch
+        .result = std.zig.system.resolveTargetQuery(std.Io.Threaded.global_single_threaded.io(), q) catch
             @panic("unable to resolve baseline query"),
     };
 }

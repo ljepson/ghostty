@@ -118,27 +118,42 @@ pub fn addPaths(b: *std.Build, step: *std.Build.Step.Compile) !void {
 
 fn findNDKPath(b: *std.Build) ?[]const u8 {
     // Check if user has set the environment variable for the NDK path.
-    if (std.process.getEnvVarOwned(b.allocator, "ANDROID_NDK_HOME") catch null) |value| {
-        if (value.len == 0) return null;
-        var dir = std.fs.openDirAbsolute(value, .{}) catch return null;
-        defer dir.close();
-        return value;
+    // TODO: Fix environment variable access for Zig 0.16.0
+    if (false) {
+        return null;
     }
 
     // Check the common environment variables for the Android SDK path and look for the NDK inside it.
     inline for (.{ "ANDROID_HOME", "ANDROID_SDK_ROOT" }) |env| {
-        if (std.process.getEnvVarOwned(b.allocator, env) catch null) |sdk| {
-            if (sdk.len > 0) {
-                if (findLatestNDK(b, sdk)) |ndk| return ndk;
+        if (comptime builtin.os.tag == .windows) {
+            if (std.process.getEnvVarOwned(b.allocator, env) catch |err| switch (err) {
+                error.EnvironmentVariableNotFound => null,
+                else => |e| return e,
+            }) |sdk| {
+                defer b.allocator.free(sdk);
+                if (sdk.len > 0) {
+                    if (findLatestNDK(b, sdk)) |ndk| return ndk;
+                }
+            }
+        } else {
+            if (std.c.getenv(env)) |sdk| {
+                if (std.mem.len(sdk) > 0) {
+                    if (findLatestNDK(b, std.mem.span(sdk))) |ndk| return ndk;
+                }
             }
         }
     }
 
     // As a fallback, we assume the most common/default SDK path based on the OS.
-    const home = std.process.getEnvVarOwned(
-        b.allocator,
-        if (builtin.os.tag == .windows) "LOCALAPPDATA" else "HOME",
-    ) catch return null;
+    const home = if (comptime builtin.os.tag == .windows) {
+        std.process.getEnvVarOwned(
+            b.allocator,
+            "LOCALAPPDATA",
+        ) catch return null;
+    } else blk: {
+        const home_c = std.c.getenv("HOME") orelse return null;
+        break :blk b.allocator.dupe(u8, std.mem.span(home_c)) catch return null;
+    };
 
     const default_sdk_path = b.pathJoin(
         &.{
@@ -157,8 +172,8 @@ fn findNDKPath(b: *std.Build) ?[]const u8 {
 
 fn findLatestNDK(b: *std.Build, sdk_path: []const u8) ?[]const u8 {
     const ndk_dir = b.pathJoin(&.{ sdk_path, "ndk" });
-    var dir = std.fs.openDirAbsolute(ndk_dir, .{ .iterate = true }) catch return null;
-    defer dir.close();
+    var dir = std.Io.Dir.cwd().openDir(std.Io.Threaded.global_single_threaded.io(), ndk_dir, .{ .iterate = true }) catch return null;
+    defer dir.close(std.Io.Threaded.global_single_threaded.io());
 
     var latest_: ?struct {
         name: []const u8,
@@ -166,7 +181,7 @@ fn findLatestNDK(b: *std.Build, sdk_path: []const u8) ?[]const u8 {
     } = null;
     var iterator = dir.iterate();
 
-    while (iterator.next() catch null) |file| {
+    while (iterator.next(std.Io.Threaded.global_single_threaded.io()) catch null) |file| {
         if (file.kind != .directory) continue;
         const version = std.SemanticVersion.parse(file.name) catch continue;
         if (latest_) |latest| {

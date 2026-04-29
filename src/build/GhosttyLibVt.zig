@@ -439,10 +439,10 @@ pub fn xcframework(
 
 /// Returns true if the Apple SDK for the given target is installed.
 fn detectAppleSDK(target: std.Target) bool {
-    _ = std.zig.LibCInstallation.findNative(.{
-        .allocator = std.heap.page_allocator,
+    _ = std.zig.LibCInstallation.findNative(std.heap.page_allocator, std.Io.Threaded.global_single_threaded.io(), .{
         .target = &target,
         .verbose = false,
+        .environ_map = @constCast(&std.process.Environ.Map.init(std.heap.page_allocator)),
     }) catch return false;
     return true;
 }

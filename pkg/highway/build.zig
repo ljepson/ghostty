@@ -24,11 +24,11 @@ pub fn build(b: *std.Build) !void {
 
     // Our highway package is free of libc at runtime (uses no symbols)
     // but does require libc headers at compile time.
-    lib.linkLibC();
+    
 
-    lib.addIncludePath(b.path("src/cpp"));
+    lib.root_module.addIncludePath(b.path("src/cpp"));
     if (upstream_) |upstream| {
-        lib.addIncludePath(upstream.path(""));
+        lib.root_module.addIncludePath(upstream.path(""));
         module.addIncludePath(upstream.path(""));
     }
 
@@ -95,11 +95,13 @@ pub fn build(b: *std.Build) !void {
         });
     }
 
-    lib.addCSourceFiles(.{ .flags = flags.items, .files = &.{
+    for (&[_][]const u8{
         "src/cpp/abort.cc",
         "src/cpp/per_target.cc",
         "src/cpp/targets.cpp",
-    } });
+    }) |file| {
+        lib.root_module.addCSourceFile(.{ .file = b.path(file), .flags = flags.items });
+    }
 
     if (upstream_) |upstream| {
         lib.installHeadersDirectory(
@@ -120,7 +122,7 @@ pub fn build(b: *std.Build) !void {
                 .optimize = optimize,
             }),
         });
-        test_exe.linkLibrary(lib);
+        test_exe.root_module.linkLibrary(lib);
 
         var it = module.import_table.iterator();
         while (it.next()) |entry| test_exe.root_module.addImport(entry.key_ptr.*, entry.value_ptr.*);

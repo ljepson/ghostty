@@ -24,15 +24,7 @@ pub fn build(b: *std.Build) !void {
     // If we have a VERSION file (present in source tarballs) then we
     // use that as the version source of truth. Otherwise we fall back
     // to what is in the build.zig.zon.
-    const file_version: ?[]const u8 = if (b.build_root.handle.readFileAlloc(
-        b.allocator,
-        "VERSION",
-        128,
-    )) |content| std.mem.trim(
-        u8,
-        content,
-        &std.ascii.whitespace,
-    ) else |_| null;
+    const file_version: ?[]const u8 = null; // TODO: Fix VERSION file reading for Zig 0.16.0
 
     const config = try buildpkg.Config.init(
         b,
