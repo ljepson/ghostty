@@ -22,6 +22,12 @@ step: *Step,
 output: LazyPath,
 
 pub fn create(b: *std.Build, opts: Options) ?*MetallibStep {
+    // Skip iOS Metal compilation for Zig 0.16.0 compatibility due to fallback SDK limitations
+    const is_zig_016 = std.mem.eql(u8, @import("builtin").zig_version_string, "0.16.0");
+    if (is_zig_016 and opts.target.result.os.tag == .ios) {
+        return null;
+    }
+    
     const sdk = switch (opts.target.result.os.tag) {
         .macos => "macosx",
         .ios => switch (opts.target.result.abi) {

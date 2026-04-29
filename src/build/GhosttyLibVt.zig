@@ -168,24 +168,29 @@ pub fn initStaticAppleUniversal(
     });
 
     // Additional Apple platforms, each gated on SDK availability.
-    for (ApplePlatform.sdk_platforms) |p| {
-        const target_query: std.Target.Query = .{
-            .cpu_arch = .aarch64,
-            .os_tag = p.os_tag,
-            .os_version_min = Config.osVersionMin(p.os_tag),
-        };
-        if (detectAppleSDK(b.resolveTargetQuery(target_query).result)) {
-            const dev_zig = try zig.retarget(b, cfg, deps, b.resolveTargetQuery(target_query));
-            result.put(p.device, try initStatic(b, &dev_zig));
-
-            const sim_zig = try zig.retarget(b, cfg, deps, b.resolveTargetQuery(.{
+    // Skip iOS platforms for Zig 0.16.0 compatibility due to fallback SDK limitations
+    const is_zig_016 = comptime (std.mem.eql(u8, @import("builtin").zig_version_string, "0.16.0"));
+    
+    if (!is_zig_016) {
+        for (ApplePlatform.sdk_platforms) |p| {
+            const target_query: std.Target.Query = .{
                 .cpu_arch = .aarch64,
                 .os_tag = p.os_tag,
                 .os_version_min = Config.osVersionMin(p.os_tag),
-                .abi = .simulator,
-                .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_a17 },
-            }));
-            result.put(p.simulator, try initStatic(b, &sim_zig));
+            };
+            if (detectAppleSDK(b.resolveTargetQuery(target_query).result)) {
+                const dev_zig = try zig.retarget(b, cfg, deps, b.resolveTargetQuery(target_query));
+                result.put(p.device, try initStatic(b, &dev_zig));
+
+                const sim_zig = try zig.retarget(b, cfg, deps, b.resolveTargetQuery(.{
+                    .cpu_arch = .aarch64,
+                    .os_tag = p.os_tag,
+                    .os_version_min = Config.osVersionMin(p.os_tag),
+                    .abi = .simulator,
+                    .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_a17 },
+                }));
+                result.put(p.simulator, try initStatic(b, &sim_zig));
+            }
         }
     }
 

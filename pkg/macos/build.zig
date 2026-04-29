@@ -21,20 +21,30 @@ pub fn build(b: *std.Build) !void {
         .linkage = .static,
     });
 
+    // Enhanced system library linking for cross-compilation in Zig 0.16.0
+    if (target.result.os.tag.isDarwin()) {
+        try apple_sdk.addPaths(b, lib);
+        lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
+    } else {
+        lib.root_module.linkSystemLibrary("c", .{});
+    }
+
     for (&[_][]const u8{"os/zig_macos.c", "text/ext.c"}) |file| {
         lib.root_module.addCSourceFile(.{ .file = b.path(file) });
     }
-    lib.root_module.linkFramework("CoreFoundation", .{});
-    lib.root_module.linkFramework("CoreGraphics", .{});
-    lib.root_module.linkFramework("CoreText", .{});
-    lib.root_module.linkFramework("CoreVideo", .{});
-    lib.root_module.linkFramework("QuartzCore", .{});
-    lib.root_module.linkFramework("IOSurface", .{});
-    if (target.result.os.tag == .macos) {
+    
+    // Enhanced framework linking with proper paths for Zig 0.16.0
+    if (target.result.os.tag.isDarwin()) {
+        lib.root_module.linkFramework("CoreFoundation", .{});
+        lib.root_module.linkFramework("CoreGraphics", .{});
+        lib.root_module.linkFramework("CoreText", .{});
+        lib.root_module.linkFramework("CoreVideo", .{});
+        lib.root_module.linkFramework("QuartzCore", .{});
+        lib.root_module.linkFramework("IOSurface", .{});
         lib.root_module.linkFramework("Carbon", .{});
-        module.linkFramework("Carbon", .{});
     }
 
+    // Module framework linking
     if (target.result.os.tag.isDarwin()) {
         module.linkFramework("CoreFoundation", .{});
         module.linkFramework("CoreGraphics", .{});
@@ -42,8 +52,9 @@ pub fn build(b: *std.Build) !void {
         module.linkFramework("CoreVideo", .{});
         module.linkFramework("QuartzCore", .{});
         module.linkFramework("IOSurface", .{});
-
-        try apple_sdk.addPaths(b, lib);
+        if (target.result.os.tag == .macos) {
+            module.linkFramework("Carbon", .{});
+        }
     }
     b.installArtifact(lib);
 

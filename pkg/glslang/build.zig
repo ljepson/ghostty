@@ -65,6 +65,12 @@ fn buildGlslang(
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
     }
+    
+    // Add system library linking for cross-compilation
+    if (!target.query.isNative()) {
+        lib.root_module.linkSystemLibrary("c++", .{});
+        lib.root_module.linkSystemLibrary("c", .{});
+    }
 
     var flags: std.ArrayList([]const u8) = .empty;
     defer flags.deinit(b.allocator);

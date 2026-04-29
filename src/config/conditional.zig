@@ -45,7 +45,7 @@ pub const Key = key: {
         .value = i,
     };
 
-    break :key @Type(.{ .@"enum" = .{
+    break :key std.meta.Type(.{ .@"enum" = .{
         .tag_type = std.math.IntFittingRange(0, fields.len - 1),
         .fields = &fields,
         .decls = &.{},

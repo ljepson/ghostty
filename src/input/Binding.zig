@@ -1416,9 +1416,9 @@ pub const Action = union(enum) {
         }
 
         // Build our union
-        return @Type(.{ .@"union" = .{
+        return std.meta.Type(.{ .@"union" = .{
             .layout = .auto,
-            .tag_type = @Type(.{ .@"enum" = .{
+            .tag_type = std.meta.Type(.{ .@"enum" = .{
                 .tag_type = std.math.IntFittingRange(0, i),
                 .fields = enum_fields[0..i],
                 .decls = &.{},

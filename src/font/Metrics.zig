@@ -593,12 +593,12 @@ pub const Key = key: {
         count += 1;
     }
 
-    var decls = [_]std.builtin.Type.Declaration{};
-    break :key @Type(.{
+    _ = [_]std.builtin.Type.Declaration{};
+    break :key std.meta.Type(.{
         .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, count - 1),
             .fields = enumFields[0..count],
-            .decls = &decls,
+            .decls = &.{},
             .is_exhaustive = true,
         },
     });

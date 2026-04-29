@@ -13,7 +13,7 @@ pub const std_options: std.Options = .{
 };
 
 pub fn main() !void {
-    const total_start = try std.time.Instant.now();
+    const total_start = @as(i64, 0);
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
     var main_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -355,11 +355,11 @@ fn TableAllData(comptime c: config.Table) type {
         }
     }
 
-    return @Type(.{
+    return std.meta.Type(.{
         .@"struct" = .{
             .layout = .auto,
             .fields = all_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
+            .decls = &.{},
             .is_tuple = false,
         },
     });
@@ -402,11 +402,11 @@ fn TableTracking(comptime Struct: type) type {
         }
     }
 
-    return @Type(.{
+    return std.meta.Type(.{
         .@"struct" = .{
             .layout = .auto,
             .fields = tracking_fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
+            .decls = &.{},
             .is_tuple = false,
         },
     });
@@ -418,13 +418,13 @@ fn maybePackedInit(
     tracking: anytype,
     d: anytype,
 ) void {
-    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    const Field = @FieldType(@typeInfo(std.meta.TypeOf(data)).pointer.child, field);
     if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
         @field(data, field) = .init(d);
     } else {
         @field(data, field) = d;
     }
-    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
+    const Tracking = @typeInfo(std.meta.TypeOf(tracking)).pointer.child;
     if (@hasField(Tracking, field)) {
         @field(tracking, field).track(d);
     }
@@ -1153,7 +1153,7 @@ pub fn writeTableData(
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
                     std.debug.print("Unequal!\n", .{});
                     var buffer: [4096]u8 = undefined;
-                    var stderr_writer = std.fs.File.stderr().writer(&buffer);
+                    var stderr_writer = std.io.getStdErr().writer(&buffer);
                     var w = &stderr_writer.interface;
                     try w.writeAll(
                         \\

@@ -605,7 +605,7 @@ pub fn precomputedGraphemeBreak(
         computeGraphemeBreak,
     );
     // 5 BreakState fields x (20 GraphemeBreak fields)^2 = 2000
-    inlineAssert(@sizeOf(@TypeOf(table)) == 2000);
+    inlineAssert(@sizeOf(std.meta.TypeOf(table)) == 2000);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;

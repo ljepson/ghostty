@@ -73,7 +73,7 @@ const PipelineCollection = t: {
             .alignment = @alignOf(Pipeline),
         };
     }
-    break :t @Type(.{ .@"struct" = .{
+    break :t std.meta.Type(.{ .@"struct" = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},

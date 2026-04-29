@@ -112,7 +112,7 @@ pub const ModePacked = packed_struct: {
         };
     }
 
-    break :packed_struct @Type(.{ .@"struct" = .{
+    break :packed_struct std.meta.Type(.{ .@"struct" = .{
         .layout = .@"packed",
         .fields = &fields,
         .decls = &.{},
@@ -134,7 +134,7 @@ pub const Mode = mode_enum: {
         };
     }
 
-    break :mode_enum @Type(.{ .@"enum" = .{
+    break :mode_enum std.meta.Type(.{ .@"enum" = .{
         .tag_type = ModeTag.Backing,
         .fields = &fields,
         .decls = &.{},

@@ -76,7 +76,7 @@ pub fn CustomIterator(comptime Context: type) type {
         }
 
         pub fn next(self: *Self) ?u21 {
-            const getFn = @typeInfo(@TypeOf(@TypeOf(self.ctx).get)).@"fn";
+            const getFn = @typeInfo(std.meta.TypeOf(std.meta.TypeOf(self.ctx).get)).@"fn";
             if (comptime getFn.return_type.? == ?u21) {
                 while (self.i < self.ctx.len()) : (self.i += 1) {
                     const value = self.ctx.get(self.i);

@@ -148,7 +148,7 @@ pub fn Common(
                     var params: [fn_info.params.len]std.builtin.Type.Fn.Param = undefined;
                     @memcpy(&params, fn_info.params);
                     params[0].type = *ClassInstance(T);
-                    return @Type(.{ .@"fn" = .{
+                    return std.meta.Type(.{ .@"fn" = .{
                         .calling_convention = fn_info.calling_convention,
                         .is_generic = fn_info.is_generic,
                         .is_var_args = fn_info.is_var_args,

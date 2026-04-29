@@ -139,7 +139,7 @@ pub const Action = union(enum) {
             };
         }
 
-        break :cvalue @Type(.{ .@"union" = .{
+        break :cvalue std.meta.Type(.{ .@"union" = .{
             .layout = .@"extern",
             .tag_type = null,
             .fields = &union_fields,

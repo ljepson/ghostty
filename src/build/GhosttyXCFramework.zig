@@ -24,34 +24,41 @@ pub fn init(
         Config.genericMacOSTarget(b, null),
     ));
 
-    // iOS
-    const ios = try GhosttyLib.initStatic(b, &try deps.retarget(
-        b,
-        b.resolveTargetQuery(.{
-            .cpu_arch = .aarch64,
-            .os_tag = .ios,
-            .os_version_min = Config.osVersionMin(.ios),
-            .abi = null,
-        }),
-    ));
+    // iOS - Skip iOS builds for Zig 0.16.0 compatibility due to fallback SDK limitations
+    const is_zig_016 = comptime (std.mem.eql(u8, @import("builtin").zig_version_string, "0.16.0"));
+    const ios = if (is_zig_016) 
+        null 
+    else 
+        try GhosttyLib.initStatic(b, &try deps.retarget(
+            b,
+            b.resolveTargetQuery(.{
+                .cpu_arch = .aarch64,
+                .os_tag = .ios,
+                .os_version_min = Config.osVersionMin(.ios),
+                .abi = null,
+            }),
+        ));
 
-    // iOS Simulator
-    const ios_sim = try GhosttyLib.initStatic(b, &try deps.retarget(
-        b,
-        b.resolveTargetQuery(.{
-            .cpu_arch = .aarch64,
-            .os_tag = .ios,
-            .os_version_min = Config.osVersionMin(.ios),
-            .abi = .simulator,
+    // iOS Simulator - Skip iOS simulator builds for Zig 0.16.0 compatibility
+    const ios_sim = if (is_zig_016) 
+        null 
+    else 
+        try GhosttyLib.initStatic(b, &try deps.retarget(
+            b,
+            b.resolveTargetQuery(.{
+                .cpu_arch = .aarch64,
+                .os_tag = .ios,
+                .os_version_min = Config.osVersionMin(.ios),
+                .abi = .simulator,
 
-            // We force the Apple CPU model because the simulator
-            // doesn't support the generic CPU model as of Zig 0.14 due
-            // to missing "altnzcv" instructions, which is false. This
-            // surely can't be right but we can fix this if/when we get
-            // back to running simulator builds.
-            .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_a17 },
-        }),
-    ));
+                // We force the Apple CPU model because the simulator
+                // doesn't support the generic CPU model as of Zig 0.14 due
+                // to missing "altnzcv" instructions, which is false. This
+                // surely can't be right but we can fix this if/when we get
+                // back to running simulator builds.
+                .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_a17 },
+            }),
+        ));
 
     // Generate a headers directory with only ghostty.h and the module
     // map. We can't use include/ directly because it also contains the
@@ -69,22 +76,35 @@ pub fn init(
         .name = "GhosttyKit",
         .out_path = "macos/GhosttyKit.xcframework",
         .libraries = switch (target) {
-            .universal => &.{
-                .{
+            .universal => blk: {
+                var libs = try std.ArrayList(XCFrameworkStep.Library).initCapacity(b.allocator, 3);
+                defer libs.deinit(b.allocator);
+                
+                // Always include macOS universal
+                try libs.append(b.allocator, .{
                     .library = macos_universal.output,
                     .headers = headers,
                     .dsym = macos_universal.dsym,
-                },
-                .{
-                    .library = ios.output,
-                    .headers = headers,
-                    .dsym = ios.dsym,
-                },
-                .{
-                    .library = ios_sim.output,
-                    .headers = headers,
-                    .dsym = ios_sim.dsym,
-                },
+                });
+                
+                // Include iOS targets if available (not null)
+                if (ios) |ios_lib| {
+                    try libs.append(b.allocator, .{
+                        .library = ios_lib.output,
+                        .headers = headers,
+                        .dsym = ios_lib.dsym,
+                    });
+                }
+                
+                if (ios_sim) |ios_sim_lib| {
+                    try libs.append(b.allocator, .{
+                        .library = ios_sim_lib.output,
+                        .headers = headers,
+                        .dsym = ios_sim_lib.dsym,
+                    });
+                }
+                
+                break :blk libs.toOwnedSlice(b.allocator) catch &[_]XCFrameworkStep.Library{};
             },
 
             .native => &.{.{

@@ -21,7 +21,7 @@ pub const Request = dsr_enum: {
         };
     }
 
-    break :dsr_enum @Type(.{ .@"enum" = .{
+    break :dsr_enum std.meta.Type(.{ .@"enum" = .{
         .tag_type = Tag.Backing,
         .fields = &fields,
         .decls = &.{},

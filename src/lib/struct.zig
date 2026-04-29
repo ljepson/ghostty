@@ -31,7 +31,7 @@ pub fn Struct(
                 };
             }
 
-            break :c @Type(.{ .@"struct" = .{
+            break :c std.meta.Type(.{ .@"struct" = .{
                 .layout = .@"extern",
                 .fields = &fields,
                 .decls = &.{},

@@ -8,11 +8,9 @@ const Action = @import("cli/ghostty.zig").Action;
 const KeybindAction = @import("input/Binding.zig").Action;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
+    const alloc = std.heap.page_allocator;
 
-    var buf: [4096]u8 = undefined;
-    var stdout = std.fs.File.stdout().writerStreaming(&buf);
+    var stdout = std.fs.getStdOut();
     const writer = &stdout.interface;
     try writer.writeAll(
         \\// THIS FILE IS AUTO GENERATED

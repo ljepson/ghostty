@@ -19,7 +19,15 @@
   #include <sys/ttycom.h>  // ioctl and constants for TIOCPTYGNAME
   #include <sys/types.h>
   #include <unistd.h> // tcgetpgrp
-  #include <util.h> // openpty
+  #ifdef __has_include
+    #if __has_include(<util.h>)
+      #include <util.h> // openpty
+    #elif __has_include(<pty.h>)
+      #include <pty.h> // openpty
+    #endif
+  #else
+    #include <util.h> // openpty
+  #endif
 
   #ifndef tiocsctty
   #define tiocsctty 536900705

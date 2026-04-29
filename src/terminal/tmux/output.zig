@@ -81,7 +81,7 @@ pub fn FormatStruct(comptime vars: []const Variable) type {
         };
     }
 
-    return @Type(.{ .@"struct" = .{
+    return std.meta.Type(.{ .@"struct" = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},

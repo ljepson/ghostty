@@ -489,7 +489,7 @@ pub fn parseTaggedUnion(comptime T: type, alloc: Allocator, v: []const u8) !T {
 
             // We need to create a struct that looks like this union field.
             // This lets us use parseIntoField as if its a dedicated struct.
-            const Target = @Type(.{ .@"struct" = .{
+            const Target = std.meta.Type(.{ .@"struct" = .{
                 .layout = .auto,
                 .fields = &.{.{
                     .name = field.name,

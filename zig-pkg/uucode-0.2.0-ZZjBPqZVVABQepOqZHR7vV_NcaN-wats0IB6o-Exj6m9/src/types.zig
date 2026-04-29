@@ -901,11 +901,11 @@ pub fn Data(comptime c: config.Table) type {
         };
     }
 
-    return @Type(.{
+    return std.meta.Type(.{
         .@"struct" = .{
             .layout = if (c.packing == .@"packed") .@"packed" else .auto,
             .fields = &data_fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
+            .decls = &.{},
             .is_tuple = false,
         },
     });
@@ -980,7 +980,7 @@ pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void 
         .@"union" => {
             switch (field) {
                 inline else => |v, tag| {
-                    if (@typeInfo(@TypeOf(v)) == .void) {
+                    if (@typeInfo(std.meta.TypeOf(v)) == .void) {
                         try writer.print(".{s}", .{@tagName(tag)});
                     } else {
                         try writer.print("{}", .{field});
@@ -1043,11 +1043,11 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
         }
     }
 
-    return @Type(.{
+    return std.meta.Type(.{
         .@"struct" = .{
             .layout = .auto,
             .fields = decl_fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
+            .decls = &.{},
             .is_tuple = false,
         },
     });
@@ -1465,7 +1465,7 @@ pub const UnionShiftTracking = struct {
 
     pub fn track(self: *UnionShiftTracking, cp: u21, value: anytype) void {
         switch (value) {
-            inline else => |v| if (@TypeOf(v) == u21) self.shift.track(cp, v),
+            inline else => |v| if (std.meta.TypeOf(v) == u21) self.shift.track(cp, v),
         }
     }
 
@@ -1726,12 +1726,12 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
         @compileError("Shift can only be used in unions with at least one field of type u21");
     }
 
-    const InnerUnion = @Type(.{
+    const InnerUnion = std.meta.Type(.{
         .@"union" = .{
             .layout = if (packing == .@"packed") .@"packed" else .auto,
             .tag_type = if (packing == .@"packed") null else Tag,
             .fields = &fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
+            .decls = &.{},
         },
     });
 
@@ -1882,9 +1882,9 @@ pub fn fieldInit(
     tracking: anytype,
     d: anytype,
 ) void {
-    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
-    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift") and @TypeOf(F.unshift) != void) {
-        if (@typeInfo(@TypeOf(d)) == .optional) {
+    const F = @FieldType(@typeInfo(std.meta.TypeOf(data)).pointer.child, field);
+    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift") and std.meta.TypeOf(F.unshift) != void) {
+        if (@typeInfo(std.meta.TypeOf(d)) == .optional) {
             @field(data, field) = .initOptional(
                 cp,
                 d,
@@ -1900,9 +1900,9 @@ pub fn fieldInit(
     } else {
         @field(data, field) = d;
     }
-    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
+    const Tracking = @typeInfo(std.meta.TypeOf(tracking)).pointer.child;
     if (@hasField(Tracking, field)) {
-        if (@typeInfo(@TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
+        if (@typeInfo(std.meta.TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
             @field(tracking, field).track(cp, d);
         } else {
             @field(tracking, field).track(d);
@@ -1921,7 +1921,7 @@ pub fn sliceFieldInit(
     tracking: anytype,
     d: anytype,
 ) Allocator.Error!void {
-    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    const F = @FieldType(@typeInfo(std.meta.TypeOf(data)).pointer.child, field);
     if (F.T == u21) {
         @field(data, field) = try .initFor(
             allocator,

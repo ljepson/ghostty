@@ -23,7 +23,7 @@ fn computeFoo(
         .control => 3,
         else => 10,
     };
-    if (@hasField(@TypeOf(data.*), "bar_unused")) {
+    if (@hasField(std.meta.TypeOf(data.*), "bar_unused")) {
         data.bar_unused = switch (data.original_grapheme_break) {
             .other => 0,
             .prepend => 1,

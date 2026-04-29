@@ -31,9 +31,15 @@ pub fn build(b: *std.Build) !void {
         
     }
 
-    if (target.result.os.tag.isDarwin()) {
+    if (target.result.os.tag.isDarwin() or target.result.os.tag == .macos) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
+    } else {
+        // Add system library linking for cross-compilation
+        lib.root_module.linkSystemLibrary("c", .{});
+        if (!no_libcxx) {
+            lib.root_module.linkSystemLibrary("c++", .{});
+        }
     }
 
     if (target.result.abi.isAndroid()) {

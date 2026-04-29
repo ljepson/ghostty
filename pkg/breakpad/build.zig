@@ -17,6 +17,19 @@ pub fn build(b: *std.Build) !void {
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
+        // Link system libraries for cross-compilation in Zig 0.16.0
+        lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
+        lib.root_module.linkSystemLibrary("c++", .{ .use_pkg_config = .no });
+    } else {
+        // Enhanced system library linking for cross-compilation
+        lib.root_module.linkSystemLibrary("c", .{});
+        lib.root_module.linkSystemLibrary("c++", .{});
+    }
+    
+    // Add additional system library linking for cross-compilation
+    if (!target.query.isNative()) {
+        lib.root_module.linkSystemLibrary("c", .{});
+        lib.root_module.linkSystemLibrary("c++", .{});
     }
 
     var flags: std.ArrayList([]const u8) = .empty;

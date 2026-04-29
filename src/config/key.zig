@@ -20,12 +20,12 @@ pub const Key = key: {
         i += 1;
     }
 
-    var decls = [_]std.builtin.Type.Declaration{};
-    break :key @Type(.{
+    _ = [_]std.builtin.Type.Declaration{};
+    break :key std.meta.Type(.{
         .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, field_infos.len - 1),
             .fields = enumFields[0..i],
-            .decls = &decls,
+            .decls = &.{},
             .is_exhaustive = true,
         },
     });

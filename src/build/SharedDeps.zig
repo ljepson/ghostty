@@ -143,13 +143,29 @@ pub fn add(
             .optimize = optimize,
         });
         if (target.result.os.tag.isDarwin()) {
-            var environ_map = try std.process.Environ.createMap(std.Io.Threaded.global_single_threaded.environ.process_environ, b.allocator);
+            var environ_map = std.process.Environ.Map.init(b.allocator);
             defer environ_map.deinit();
-            const libc = try std.zig.LibCInstallation.findNative(b.allocator, std.Io.Threaded.global_single_threaded.io(), .{
-                .environ_map = &environ_map,
-                .target = &target.result,
-                .verbose = false,
-            });
+            const libc = blk: {
+                const result = std.zig.LibCInstallation.findNative(b.allocator, std.Io.Threaded.global_single_threaded.io(), .{
+                    .environ_map = &environ_map,
+                    .target = &target.result,
+                    .verbose = false,
+                }) catch |err| {
+                    // If SDK detection fails, create a minimal libc installation
+                    std.log.warn("Failed to detect macOS SDK in SharedDeps, using fallback: {}", .{err});
+                    const fallback_libc = b.allocator.create(std.zig.LibCInstallation) catch unreachable;
+                    fallback_libc.* = .{
+                        .include_dir = "/usr/include",
+                        .sys_include_dir = "/usr/include",
+                        .crt_dir = "/usr/lib",
+                        .msvc_lib_dir = "",
+                        .kernel32_lib_dir = "",
+                        .gcc_dir = "",
+                    };
+                    break :blk fallback_libc.*;
+                };
+                break :blk result;
+            };
             c.addSystemIncludePath(.{ .cwd_relative = libc.sys_include_dir.? });
         }
         step.root_module.addImport("locale-c", c.createModule());
@@ -168,13 +184,29 @@ pub fn add(
             });
             switch (target.result.os.tag) {
                 .macos => {
-                    var environ_map = try std.process.Environ.createMap(std.Io.Threaded.global_single_threaded.environ.process_environ, b.allocator);
+                    var environ_map = std.process.Environ.Map.init(b.allocator);
                     defer environ_map.deinit();
-                    const libc = try std.zig.LibCInstallation.findNative(b.allocator, std.Io.Threaded.global_single_threaded.io(), .{
-                        .environ_map = &environ_map,
-                        .target = &target.result,
-                        .verbose = false,
-                    });
+                    const libc = blk: {
+                        const result = std.zig.LibCInstallation.findNative(b.allocator, std.Io.Threaded.global_single_threaded.io(), .{
+                            .environ_map = &environ_map,
+                            .target = &target.result,
+                            .verbose = false,
+                        }) catch |err| {
+                            // If SDK detection fails, create a minimal libc installation
+                            std.log.warn("Failed to detect macOS SDK in SharedDeps PTY, using fallback: {}", .{err});
+                            const fallback_libc = b.allocator.create(std.zig.LibCInstallation) catch unreachable;
+                            fallback_libc.* = .{
+                                .include_dir = "/usr/include",
+                                .sys_include_dir = "/usr/include",
+                                .crt_dir = "/usr/lib",
+                                .msvc_lib_dir = "",
+                                .kernel32_lib_dir = "",
+                                .gcc_dir = "",
+                            };
+                            break :blk fallback_libc.*;
+                        };
+                        break :blk result;
+                    };
                     c.addSystemIncludePath(.{ .cwd_relative = libc.sys_include_dir.? });
                 },
                 else => {},

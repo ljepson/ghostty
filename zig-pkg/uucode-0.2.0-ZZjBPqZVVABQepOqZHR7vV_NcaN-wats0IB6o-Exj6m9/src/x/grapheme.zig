@@ -64,7 +64,7 @@ const inlineAssert = @import("config.zig").quirks.inlineAssert;
 // width of the remaining graphemes in the iterator, and `utf8Wcwidth` for the
 // width of a string.
 pub fn wcwidthNext(it: anytype) usize {
-    inlineAssert(@typeInfo(@TypeOf(it)) == .pointer);
+    inlineAssert(@typeInfo(std.meta.TypeOf(it)) == .pointer);
 
     const first = it.nextCodePoint() orelse return 0;
 
@@ -821,7 +821,7 @@ pub fn precomputedGraphemeBreakNoControl(
         computeGraphemeBreakNoControl,
     );
     // 5 BreakState fields x (17 GraphemeBreak fields)^2 = 1445
-    inlineAssert(@sizeOf(@TypeOf(table)) == 1445);
+    inlineAssert(@sizeOf(std.meta.TypeOf(table)) == 1445);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;
