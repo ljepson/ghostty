@@ -16,16 +16,23 @@ pub fn build(b: *std.Build) !void {
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
-        // Link system libraries for cross-compilation in Zig 0.16.0
+        // Enhanced system library linking for Zig 0.16.0 compatibility
         lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
+        // Add system include paths for Zig 0.16.0 fallback SDK
+        lib.root_module.addIncludePath(b.path("/usr/include"));
+        lib.root_module.addIncludePath(b.path("/usr/local/include"));
     } else {
         // Enhanced system library linking for cross-compilation
         lib.root_module.linkSystemLibrary("c", .{});
+        lib.root_module.addIncludePath(b.path("/usr/include"));
+        lib.root_module.addIncludePath(b.path("/usr/local/include"));
     }
     
     // Add additional system library linking for cross-compilation
     if (!target.query.isNative()) {
         lib.root_module.linkSystemLibrary("c", .{});
+        lib.root_module.addIncludePath(b.path("/usr/include"));
+        lib.root_module.addIncludePath(b.path("/usr/local/include"));
     }
 
     if (b.lazyDependency("zlib", .{})) |upstream| {

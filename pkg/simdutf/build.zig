@@ -34,6 +34,14 @@ pub fn build(b: *std.Build) !void {
     if (target.result.os.tag.isDarwin() or target.result.os.tag == .macos) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
+        // Enhanced system library linking for Zig 0.16.0 compatibility
+        lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
+        if (!no_libcxx) {
+            lib.root_module.linkSystemLibrary("c++", .{ .use_pkg_config = .no });
+        }
+        // Add system include paths for Zig 0.16.0 fallback SDK
+        lib.root_module.addIncludePath(b.path("/usr/include"));
+        lib.root_module.addIncludePath(b.path("/usr/local/include"));
     } else {
         // Add system library linking for cross-compilation
         lib.root_module.linkSystemLibrary("c", .{});
