@@ -1440,7 +1440,7 @@ fn execCommand(
         };
 
         const hush = if (passwd.home) |home| hush: {
-            var dir = std.fs.openDirAbsolute(home, .{}) catch |err| {
+            var dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, home, .{}) catch |err| {
                 log.warn(
                     "failed to open home dir, not checking for hushlogin err={}",
                     .{err},

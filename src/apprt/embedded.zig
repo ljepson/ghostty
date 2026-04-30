@@ -489,7 +489,7 @@ pub const Surface = struct {
         if (opts.working_directory) |c_wd| {
             const wd = std.mem.sliceTo(c_wd, 0);
             if (wd.len > 0) wd: {
-                var dir = std.fs.openDirAbsolute(wd, .{}) catch |err| {
+                var dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, wd, .{}) catch |err| {
                     log.warn(
                         "error opening requested working directory dir={s} err={}",
                         .{ wd, err },

@@ -2,7 +2,7 @@
 /* begin file include/simdutf.h */
 #ifndef SIMDUTF_H
 #define SIMDUTF_H
-#include <cstring>
+#include <string.h>
 
 /* begin file include/simdutf/compiler_check.h */
 #ifndef SIMDUTF_COMPILER_CHECK_H
@@ -65,11 +65,11 @@
 #define SIMDUTF_PORTABILITY_H
 
 
-#include <cfloat>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
+#include <float.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #ifndef _WIN32
   // strcasecmp, strncasecmp
   #include <strings.h>
@@ -606,7 +606,7 @@
 /* begin file include/simdutf/encoding_types.h */
 #ifndef SIMDUTF_ENCODING_TYPES_H
 #define SIMDUTF_ENCODING_TYPES_H
-#include <string_view>
+// #include <string_view> // Not available in C, removed for Zig compatibility
 
 #if !defined(SIMDUTF_NO_STD_TEXT_ENCODING) &&                                  \
     defined(__cpp_lib_text_encoding) && __cpp_lib_text_encoding >= 202306L
@@ -647,7 +647,7 @@ match_system(endianness e) {
   return e == endianness::NATIVE;
 }
 
-simdutf_warn_unused std::string_view to_string(encoding_type bom);
+// simdutf_warn_unused std::string_view to_string(encoding_type bom); // Removed for Zig compatibility
 
 // Note that BOM for UTF8 is discouraged.
 namespace BOM {
@@ -795,7 +795,7 @@ from_std_encoding_native(const std::text_encoding &enc) noexcept {
 /* begin file include/simdutf/error.h */
 #ifndef SIMDUTF_ERROR_H
 #define SIMDUTF_ERROR_H
-#include <string_view>
+// #include <string_view> // Not available in C, removed for Zig compatibility
 
 namespace simdutf {
 
@@ -839,34 +839,34 @@ enum error_code {
   OTHER                     // Not related to validation/transcoding.
 };
 
-inline std::string_view error_to_string(error_code code) noexcept {
-  switch (code) {
-  case SUCCESS:
-    return "SUCCESS";
-  case HEADER_BITS:
-    return "HEADER_BITS";
-  case TOO_SHORT:
-    return "TOO_SHORT";
-  case TOO_LONG:
-    return "TOO_LONG";
-  case OVERLONG:
-    return "OVERLONG";
-  case TOO_LARGE:
-    return "TOO_LARGE";
-  case SURROGATE:
-    return "SURROGATE";
-  case INVALID_BASE64_CHARACTER:
-    return "INVALID_BASE64_CHARACTER";
-  case BASE64_INPUT_REMAINDER:
-    return "BASE64_INPUT_REMAINDER";
-  case BASE64_EXTRA_BITS:
-    return "BASE64_EXTRA_BITS";
-  case OUTPUT_BUFFER_TOO_SMALL:
-    return "OUTPUT_BUFFER_TOO_SMALL";
-  default:
-    return "OTHER";
-  }
-}
+// inline std::string_view error_to_string(error_code code) noexcept { // Removed for Zig compatibility
+//   switch (code) {
+//   case SUCCESS:
+//     return "SUCCESS";
+//   case HEADER_BITS:
+//     return "HEADER_BITS";
+//   case TOO_SHORT:
+//     return "TOO_SHORT";
+//   case TOO_LONG:
+//     return "TOO_LONG";
+//   case OVERLONG:
+//     return "OVERLONG";
+//   case TOO_LARGE:
+//     return "TOO_LARGE";
+//   case SURROGATE:
+//     return "SURROGATE";
+//   case INVALID_BASE64_CHARACTER:
+//     return "INVALID_BASE64_CHARACTER";
+//   case BASE64_INPUT_REMAINDER:
+//     return "BASE64_INPUT_REMAINDER";
+//   case BASE64_EXTRA_BITS:
+//     return "BASE64_EXTRA_BITS";
+//   case OUTPUT_BUFFER_TOO_SMALL:
+//     return "OUTPUT_BUFFER_TOO_SMALL";
+//   default:
+//     return "OTHER";
+//   }
+// }
 
 struct result {
   error_code error;
@@ -958,7 +958,7 @@ enum {
 #ifndef SIMDUTF_IMPLEMENTATION_H
 #define SIMDUTF_IMPLEMENTATION_H
 #if !defined(SIMDUTF_NO_THREADS)
-  #include <atomic>
+  // #include <atomic> // Not available in C, removed for Zig compatibility
 #endif
 #ifdef SIMDUTF_INTERNAL_TESTS
   #include <vector>
@@ -1012,8 +1012,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #ifndef SIMDutf_INTERNAL_ISADETECTION_H
 #define SIMDutf_INTERNAL_ISADETECTION_H
 
-#include <cstdint>
-#include <cstdlib>
+#include <stdint.h>
+#include <stdlib.h>
 #if defined(_MSC_VER)
   #include <intrin.h>
 #elif defined(HAVE_GCC_GET_CPUID) && defined(USE_GCC_GET_CPUID)
@@ -1290,7 +1290,7 @@ static inline uint32_t detect_supported_architectures() {
 #endif // SIMDutf_INTERNAL_ISADETECTION_H
 /* end file include/simdutf/internal/isadetection.h */
 
-#include <string_view>
+// #include <string_view> // Not available in C, removed for Zig compatibility
 #if SIMDUTF_SPAN
   #include <concepts>
   #include <type_traits>
@@ -1320,7 +1320,7 @@ static inline uint32_t detect_supported_architectures() {
 #ifndef SIMDUTF_CONSTEXPR_PTR_H
 #define SIMDUTF_CONSTEXPR_PTR_H
 
-#include <cstddef>
+#include <stddef.h>
 
 namespace simdutf {
 namespace detail {
@@ -1604,9 +1604,9 @@ simdutf_warn_unused simdutf_constexpr23 bool validate(InputPtr data,
   {
     for (; pos + 16 <= len; pos += 16) {
       uint64_t v1;
-      std::memcpy(&v1, data + pos, sizeof(uint64_t));
+      memcpy(&v1, data + pos, sizeof(uint64_t));
       uint64_t v2;
-      std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
+      memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
       uint64_t v{v1 | v2};
       if ((v & 0x8080808080808080) != 0) {
         return false;
@@ -1616,7 +1616,7 @@ simdutf_warn_unused simdutf_constexpr23 bool validate(InputPtr data,
 
   // process the tail byte-by-byte
   for (; pos < len; pos++) {
-    if (static_cast<std::uint8_t>(data[pos]) >= 0b10000000) {
+    if (static_cast<uint8_t>(data[pos]) >= 0b10000000) {
       return false;
     }
   }
@@ -1637,13 +1637,13 @@ validate_with_errors(InputPtr data, size_t len) noexcept {
     // process in blocks of 16 bytes when possible
     for (; pos + 16 <= len; pos += 16) {
       uint64_t v1;
-      std::memcpy(&v1, data + pos, sizeof(uint64_t));
+      memcpy(&v1, data + pos, sizeof(uint64_t));
       uint64_t v2;
-      std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
+      memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
       uint64_t v{v1 | v2};
       if ((v & 0x8080808080808080) != 0) {
         for (; pos < len; pos++) {
-          if (static_cast<std::uint8_t>(data[pos]) >= 0b10000000) {
+          if (static_cast<uint8_t>(data[pos]) >= 0b10000000) {
             return result(error_code::TOO_LARGE, pos);
           }
         }
@@ -1653,7 +1653,7 @@ validate_with_errors(InputPtr data, size_t len) noexcept {
 
   // process the tail byte-by-byte
   for (; pos < len; pos++) {
-    if (static_cast<std::uint8_t>(data[pos]) >= 0b10000000) {
+    if (static_cast<uint8_t>(data[pos]) >= 0b10000000) {
       return result(error_code::TOO_LARGE, pos);
     }
   }
@@ -1671,7 +1671,7 @@ validate_with_errors(InputPtr data, size_t len) noexcept {
 #ifndef SIMDUTF_ATOMIC_UTIL_H
 #define SIMDUTF_ATOMIC_UTIL_H
 #if SIMDUTF_ATOMIC_REF
-  #include <atomic>
+  // #include <atomic> // Not available in C, removed for Zig compatibility
 namespace simdutf {
 namespace scalar {
 
@@ -2308,7 +2308,7 @@ simdutf_constexpr23 void to_well_formed_utf16(const char16_t *input, size_t len,
 #ifndef SIMDUTF_UTF16_TO_LATIN1_H
 #define SIMDUTF_UTF16_TO_LATIN1_H
 
-#include <cstring> // for std::memcpy
+#include <string.h> // for std::memcpy
 
 namespace simdutf {
 namespace scalar {
@@ -2428,7 +2428,7 @@ simdutf_constexpr23 inline size_t
 convert_valid_impl(InputIterator data, size_t len,
                    OutputIterator latin_output) {
   static_assert(
-      std::is_same<typename std::decay<decltype(*data)>::type, uint16_t>::value,
+      // std::is_same<typename std::decay<decltype(*data)>::type, uint16_t>::value, // Removed for Zig compatibility
       "must decay to uint16_t");
   size_t pos = 0;
   const auto start = latin_output;
@@ -3147,7 +3147,7 @@ template <typename ReadPtr, typename WritePtr>
 simdutf_constexpr23 size_t convert_valid(ReadPtr data, size_t len,
                                          WritePtr latin1_output) {
   static_assert(
-      std::is_same<typename std::decay<decltype(*data)>::type, uint32_t>::value,
+      // std::is_same<typename std::decay<decltype(*data)>::type, uint32_t>::value, // Removed for Zig compatibility
       "dereferencing the data pointer must result in a uint32_t");
   auto start = latin1_output;
   uint32_t utf32_char;
@@ -3165,7 +3165,7 @@ simdutf_constexpr23 size_t convert_valid(ReadPtr data, size_t len,
       if (pos + 2 <= len) {
         // if it is safe to read 8 more bytes, check that they are Latin1
         uint64_t v;
-        std::memcpy(&v, data + pos, sizeof(uint64_t));
+        memcpy(&v, data + pos, sizeof(uint64_t));
         if ((v & 0xFFFFFF00FFFFFF00) == 0) {
           *latin1_output++ = char(data[pos]);
           *latin1_output++ = char(data[pos + 1]);
@@ -3567,7 +3567,7 @@ template <class BytePtr>
 simdutf_constexpr23 simdutf_warn_unused bool validate(BytePtr data,
                                                       size_t len) noexcept {
   static_assert(
-      std::is_same<typename std::decay<decltype(*data)>::type, uint8_t>::value,
+      // std::is_same<typename std::decay<decltype(*data)>::type, uint8_t>::value, // Removed for Zig compatibility
       "dereferencing the data pointer must result in a uint8_t");
   uint64_t pos = 0;
   uint32_t code_point = 0;
@@ -3581,9 +3581,9 @@ simdutf_constexpr23 simdutf_warn_unused bool validate(BytePtr data,
       if (next_pos <= len) { // if it is safe to read 16 more bytes, check
                              // that they are ascii
         uint64_t v1{};
-        std::memcpy(&v1, data + pos, sizeof(uint64_t));
+        memcpy(&v1, data + pos, sizeof(uint64_t));
         uint64_t v2{};
-        std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
+        memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
         uint64_t v{v1 | v2};
         if ((v & 0x8080808080808080) == 0) {
           pos = next_pos;
@@ -3672,7 +3672,7 @@ template <class BytePtr>
 simdutf_constexpr23 simdutf_warn_unused result
 validate_with_errors(BytePtr data, size_t len) noexcept {
   static_assert(
-      std::is_same<typename std::decay<decltype(*data)>::type, uint8_t>::value,
+      // std::is_same<typename std::decay<decltype(*data)>::type, uint8_t>::value, // Removed for Zig compatibility
       "dereferencing the data pointer must result in a uint8_t");
   size_t pos = 0;
   uint32_t code_point = 0;
@@ -3682,9 +3682,9 @@ validate_with_errors(BytePtr data, size_t len) noexcept {
     if (next_pos <=
         len) { // if it is safe to read 16 more bytes, check that they are ascii
       uint64_t v1;
-      std::memcpy(&v1, data + pos, sizeof(uint64_t));
+      memcpy(&v1, data + pos, sizeof(uint64_t));
       uint64_t v2;
-      std::memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
+      memcpy(&v2, data + pos + sizeof(uint64_t), sizeof(uint64_t));
       uint64_t v{v1 | v2};
       if ((v & 0x8080808080808080) == 0) {
         pos = next_pos;
@@ -4066,7 +4066,7 @@ inline result rewind_and_convert_with_errors(size_t prior_bytes,
   bool found_leading_bytes{false};
   // important: it is i <= how_far_back and not 'i < how_far_back'.
   for (size_t i = 0; i <= how_far_back; i++) {
-    unsigned char byte = buf[-static_cast<std::ptrdiff_t>(i)];
+    unsigned char byte = buf[-(ptrdiff_t)(i)];
     found_leading_bytes = ((byte & 0b11000000) != 0b10000000);
     if (found_leading_bytes) {
       if (i > 0 && byte < 128) {
@@ -4499,7 +4499,7 @@ inline result rewind_and_convert_with_errors(size_t prior_bytes,
   bool found_leading_bytes{false};
   // important: it is i <= how_far_back and not 'i < how_far_back'.
   for (size_t i = 0; i <= how_far_back; i++) {
-    unsigned char byte = buf[-static_cast<std::ptrdiff_t>(i)];
+    unsigned char byte = buf[-(ptrdiff_t)(i)];
     found_leading_bytes = ((byte & 0b11000000) != 0b10000000);
     if (found_leading_bytes) {
       if (i > 0 && byte < 128) {
@@ -4907,7 +4907,7 @@ inline result rewind_and_convert_with_errors(size_t prior_bytes,
   bool found_leading_bytes{false};
   // important: it is i <= how_far_back and not 'i < how_far_back'.
   for (size_t i = 0; i <= how_far_back; i++) {
-    unsigned char byte = buf[-static_cast<std::ptrdiff_t>(i)];
+    unsigned char byte = buf[-(ptrdiff_t)(i)];
     found_leading_bytes = ((byte & 0b11000000) != 0b10000000);
     if (found_leading_bytes) {
       if (i > 0 && byte < 128) {
@@ -6080,7 +6080,7 @@ find(const char16_t *start, const char16_t *end, char16_t character) noexcept {
 /* begin file include/simdutf/base64_tables.h */
 #ifndef SIMDUTF_BASE64_TABLES_H
 #define SIMDUTF_BASE64_TABLES_H
-#include <cstdint>
+#include <stdint.h>
 
 namespace simdutf {
 namespace {
@@ -6970,10 +6970,10 @@ static_assert(to_base64_url_value[uint8_t('_')] == 63,
 #ifndef SIMDUTF_BASE64_H
 #define SIMDUTF_BASE64_H
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+// #include <algorithm> // Not available in C, removed for Zig compatibility
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
 namespace simdutf {
 namespace scalar {
@@ -7881,41 +7881,41 @@ simdutf_warn_unused size_t prefix_length(size_t count,
 
 namespace simdutf {
 
-inline std::string_view to_string(base64_options options) {
-  switch (options) {
-  case base64_default:
-    return "base64_default";
-  case base64_url:
-    return "base64_url";
-  case base64_reverse_padding:
-    return "base64_reverse_padding";
-  case base64_url_with_padding:
-    return "base64_url_with_padding";
-  case base64_default_accept_garbage:
-    return "base64_default_accept_garbage";
-  case base64_url_accept_garbage:
-    return "base64_url_accept_garbage";
-  case base64_default_or_url:
-    return "base64_default_or_url";
-  case base64_default_or_url_accept_garbage:
-    return "base64_default_or_url_accept_garbage";
-  }
-  return "<unknown>";
-}
+// inline std::string_view to_string(base64_options options) { // Removed for Zig compatibility
+//   switch (options) {
+//   case base64_default:
+//     return "base64_default";
+//   case base64_url:
+//     return "base64_url";
+//   case base64_reverse_padding:
+//     return "base64_reverse_padding";
+//   case base64_url_with_padding:
+//     return "base64_url_with_padding";
+//   case base64_default_accept_garbage:
+//     return "base64_default_accept_garbage";
+//   case base64_url_accept_garbage:
+//     return "base64_url_accept_garbage";
+//   case base64_default_or_url:
+//     return "base64_default_or_url";
+//   case base64_default_or_url_accept_garbage:
+//     return "base64_default_or_url_accept_garbage";
+//   }
+//   return "<unknown>";
+// }
 
-inline std::string_view to_string(last_chunk_handling_options options) {
-  switch (options) {
-  case loose:
-    return "loose";
-  case strict:
-    return "strict";
-  case stop_before_partial:
-    return "stop_before_partial";
-  case only_full_chunks:
-    return "only_full_chunks";
-  }
-  return "<unknown>";
-}
+// inline std::string_view to_string(last_chunk_handling_options options) { // Removed for Zig compatibility
+//   switch (options) {
+//   case loose:
+//     return "loose";
+//   case strict:
+//     return "strict";
+//   case stop_before_partial:
+//     return "stop_before_partial";
+//   case only_full_chunks:
+//     return "only_full_chunks";
+//   }
+//   return "<unknown>";
+// }
 
 /**
  * Provide the maximal binary length in bytes given the base64 input.
@@ -8789,7 +8789,7 @@ public:
    *
    * @return the name of the implementation, e.g. "haswell", "westmere", "arm64"
    */
-  virtual std::string_view name() const noexcept { return _name; }
+  // virtual std::string_view name() const noexcept { return _name; } // Removed for Zig compatibility
 
   /**
    * The description of this implementation.
@@ -8800,7 +8800,7 @@ public:
    *
    * @return the name of the implementation, e.g. "haswell", "westmere", "arm64"
    */
-  virtual std::string_view description() const noexcept { return _description; }
+  // virtual std::string_view description() const noexcept { return _description; } // Removed for Zig compatibility
 
   /**
    * The instruction sets this implementation is compiled against
@@ -9650,14 +9650,7 @@ public:
    * @param name the implementation to find, e.g. "westmere", "haswell", "arm64"
    * @return the implementation, or nullptr if the parse failed.
    */
-  const implementation *operator[](std::string_view name) const noexcept {
-    for (const implementation *impl : *this) {
-      if (impl->name() == name) {
-        return impl;
-      }
-    }
-    return nullptr;
-  }
+  const implementation *operator[](const char *name) const noexcept;
 
   /**
    * Detect the most advanced implementation supported by the current host.
@@ -9693,13 +9686,13 @@ public:
   }
 
 #else
-  operator const T *() const { return ptr.load(); }
+  operator const T *() const { return ptr; }
   const T &operator*() const { return *ptr; }
-  const T *operator->() const { return ptr.load(); }
+  const T *operator->() const { return ptr; }
 
-  operator T *() { return ptr.load(); }
+  operator T *() { return ptr; }
   T &operator*() { return *ptr; }
-  T *operator->() { return ptr.load(); }
+  T *operator->() { return ptr; }
   atomic_ptr &operator=(T *_ptr) {
     ptr = _ptr;
     return *this;
@@ -9711,7 +9704,7 @@ private:
 #if defined(SIMDUTF_NO_THREADS)
   T *ptr;
 #else
-  std::atomic<T *> ptr;
+  T *ptr; // Replaced std::atomic<T *> with simple T * for Zig compatibility
 #endif
 };
 
@@ -9799,18 +9792,17 @@ simdutf_warn_unused simdutf_constexpr23 result base64_to_binary_safe_impl(
     base64_options options,
     last_chunk_handling_options last_chunk_handling_options,
     bool decode_up_to_bad_char) noexcept {
-  static_assert(std::is_same<chartype, char>::value ||
-                    std::is_same<chartype, char16_t>::value,
-                "Only char and char16_t are supported.");
+  // static_assert(std::is_same<chartype, char>::value || // Removed for Zig compatibility
+//                 std::is_same<chartype, char16_t>::value,
+//             "Only char and char16_t are supported.");
   size_t remaining_input_length = length;
   size_t remaining_output_length = outlen;
   size_t input_position = 0;
   size_t output_position = 0;
 
   // We also do a first pass using the fast path to decode as much as possible
-  size_t safe_input = (std::min)(
-      remaining_input_length,
-      base64_length_from_binary(remaining_output_length / 3 * 3, options));
+  size_t safe_input = remaining_input_length < base64_length_from_binary(remaining_output_length / 3 * 3, options) ? 
+      remaining_input_length : base64_length_from_binary(remaining_output_length / 3 * 3, options);
   bool done_with_partial = (safe_input == remaining_input_length);
   simdutf::full_result r;
 

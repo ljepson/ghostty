@@ -139,7 +139,7 @@ fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSectio
 }
 
 pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config.Table) !Self {
-    const start = @as(i64, 0);
+    // const start = @as(i64, 0); // Removed for Zig 0.16.0 compatibility
 
     var self: Self = .{};
 
@@ -228,8 +228,8 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
         try parseIndicSyllabicCategory(allocator, self.indic_syllabic_category);
     }
 
-    const end = try std.time.Instant.now();
-    std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
+    // Timing code removed for Zig 0.16.0 compatibility
+    std.log.debug("Ucd init completed\n", .{});
 
     return self;
 }
@@ -355,7 +355,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
     // definitive. However, for default values of properties, the extracted
     // data files are definitive.
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
@@ -634,7 +634,7 @@ fn parseCaseFolding(
 
     const file_path = "ucd/CaseFolding.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -698,7 +698,7 @@ fn parseSpecialCasing(
 
     const file_path = "ucd/SpecialCasing.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -809,7 +809,7 @@ fn parseDerivedCoreProperties(
 
     const file_path = "ucd/DerivedCoreProperties.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
@@ -866,7 +866,7 @@ fn parseBidiBrackets(
 
     const file_path = "ucd/BidiBrackets.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
@@ -932,7 +932,7 @@ fn parseDerivedBidiClass(
 
     const file_path = "ucd/extracted/DerivedBidiClass.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
@@ -1007,7 +1007,7 @@ fn parseEastAsianWidth(
 
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -1089,7 +1089,7 @@ fn parseGraphemeBreak(
 
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -1139,7 +1139,7 @@ fn parseEmojiData(
 
     const file_path = "ucd/emoji/emoji-data.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -1193,8 +1193,9 @@ fn parseEmojiVariationSequences(
 
     const file_path = "ucd/emoji/emoji-variation-sequences.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
+
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
     defer allocator.free(content);
 
@@ -1225,7 +1226,7 @@ fn parseBlocks(
 
     const file_path = "ucd/Blocks.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -1615,7 +1616,7 @@ fn parseScripts(
 
     const file_path = "ucd/Scripts.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -1832,7 +1833,7 @@ fn parseJoiningType(
 
     const file_path = "ucd/extracted/DerivedJoiningType.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -1880,7 +1881,7 @@ fn parseJoiningGroup(
 
     const file_path = "ucd/extracted/DerivedJoiningGroup.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -2029,7 +2030,7 @@ fn parseCompositionExclusions(
 
     const file_path = "ucd/CompositionExclusions.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -2058,7 +2059,7 @@ fn parseIndicPositionalCategory(
 
     const file_path = "ucd/IndicPositionalCategory.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -2117,7 +2118,7 @@ fn parseIndicSyllabicCategory(
 
     const file_path = "ucd/IndicSyllabicCategory.txt";
 
-    const file = try std.fs.openFileAbsolute(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);

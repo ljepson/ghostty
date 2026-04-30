@@ -1,6 +1,64 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// Detect Xcode SDK path dynamically
+fn detectXcodeSDKPath(allocator: std.mem.Allocator) ![]const u8 {
+    // First try to get the path from xcode-select
+    const result = std.process.run(allocator, std.Io.Threaded.global_single_threaded.io(), .{
+        .argv = &[_][]const u8{ "xcode-select", "--print-path" },
+    }) catch {
+        // xcode-select failed, fall back to default path
+        const default_path = "/Applications/Xcode.app/Contents/Developer";
+        const sdk_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk", .{default_path});
+        return sdk_path;
+    };
+    defer allocator.free(result.stdout);
+    
+    // Trim whitespace from the output
+    const xcode_path = std.mem.trim(u8, result.stdout, "\n\r ");
+    
+    // Construct the SDK path
+    const sdk_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk", .{xcode_path});
+    
+    // Verify the SDK path exists
+    var dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, sdk_path, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            // SDK not found, try to find available SDKs
+            const platforms_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs", .{xcode_path});
+            defer allocator.free(platforms_path);
+            
+            var platforms_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, platforms_path, .{}) catch {
+                // If platforms directory doesn't exist, fall back to default
+                allocator.free(sdk_path);
+                const default_path = "/Applications/Xcode.app/Contents/Developer";
+                const fallback_sdk_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk", .{default_path});
+                return fallback_sdk_path;
+            };
+            defer platforms_dir.close(std.Io.failing);
+            
+            // Look for the first available SDK
+            var iterator = platforms_dir.iterate();
+            while (try iterator.next(std.Io.failing)) |entry| {
+                if (entry.kind == .directory and std.mem.startsWith(u8, entry.name, "MacOSX")) {
+                    allocator.free(sdk_path);
+                    const found_sdk_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ platforms_path, entry.name });
+                    return found_sdk_path;
+                }
+            }
+            
+            // No SDK found, fall back to default
+            allocator.free(sdk_path);
+            const default_path = "/Applications/Xcode.app/Contents/Developer";
+            const fallback_sdk_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk", .{default_path});
+            return fallback_sdk_path;
+        },
+        else => return err,
+    };
+    dir.close(std.Io.failing);
+    
+    return sdk_path;
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -58,25 +116,19 @@ pub fn addPaths(
             var environ_map = std.process.Environ.Map.init(b.allocator);
             defer environ_map.deinit();
             const libc = blk: {
-                const result = std.zig.LibCInstallation.findNative(b.allocator, std.Io.Threaded.global_single_threaded.io(), .{
-                    .environ_map = &environ_map,
-                    .target = &step.rootModuleTarget(),
-                    .verbose = false,
-                }) catch |err| {
-                    // If SDK detection fails, create a minimal libc installation
-                    std.log.warn("Failed to detect macOS SDK, using fallback: {}", .{err});
-                    const fallback_libc = b.allocator.create(std.zig.LibCInstallation) catch unreachable;
-                    fallback_libc.* = .{
-                        .include_dir = "/usr/include",
-                        .sys_include_dir = "/usr/include",
-                        .crt_dir = "/usr/lib",
-                        .msvc_lib_dir = "",
-                        .kernel32_lib_dir = "",
-                        .gcc_dir = "",
-                    };
-                    break :blk fallback_libc.*;
+                // Detect Xcode SDK path dynamically for Zig 0.16.0 compatibility
+                const sdk_path = detectXcodeSDKPath(b.allocator) catch 
+                    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
+                const custom_libc = b.allocator.create(std.zig.LibCInstallation) catch unreachable;
+                custom_libc.* = .{
+                    .include_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch unreachable,
+                    .sys_include_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch unreachable,
+                    .crt_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/lib", .{sdk_path}) catch unreachable,
+                    .msvc_lib_dir = "",
+                    .kernel32_lib_dir = "",
+                    .gcc_dir = "",
                 };
-                break :blk result;
+                break :blk custom_libc.*;
             };
 
             // Render the file compatible with the `--libc` Zig flag.

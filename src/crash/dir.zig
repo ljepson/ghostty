@@ -20,7 +20,7 @@ pub const Dir = struct {
     /// iterator must be freed with `ReportIterator.deinit`. The iterator
     /// may have no reports.
     pub fn iterator(self: *const Dir) !ReportIterator {
-        var dir = std.fs.openDirAbsolute(
+        var dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing,
             self.path,
             .{ .iterate = true },
         ) catch return .{};

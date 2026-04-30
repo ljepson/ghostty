@@ -87,7 +87,7 @@ const EmojiData = packed struct {
 const Self = @This();
 
 pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
-    const start = try std.time.Instant.now();
+    // const start = std.Io.Clock.Timestamp.now(std.Io.Threaded.global_single_threaded.io(), .awake); // Removed for Zig 0.16.0 compatibility
     try parseUnicodeData(allocator, &self.unicode_data);
     try parseCaseFolding(allocator, &self.case_folding);
     try parseSpecialCasing(allocator, &self.special_casing);
@@ -98,8 +98,8 @@ pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     try parseBlocks(allocator, &self.blocks);
     try parseBidiBrackets(allocator, &self.bidi_paired_bracket);
 
-    const end = try std.time.Instant.now();
-    std.log.debug("Ucd init time: {d}ms\n", .{end.since(start) / std.time.ns_per_ms});
+    // Timing code removed for Zig 0.16.0 compatibility
+    std.log.debug("Ucd init completed\n", .{});
 }
 
 // Public for GraphemeBreakTest in src/grapheme.zig
@@ -153,7 +153,7 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
     // definitive. However, for default values of properties, the extracted
     // data files are definitive.
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
@@ -377,7 +377,7 @@ fn parseCaseFolding(
 
     const file_path = "ucd/CaseFolding.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -441,7 +441,7 @@ fn parseSpecialCasing(
 
     const file_path = "ucd/SpecialCasing.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -548,7 +548,7 @@ fn parseDerivedCoreProperties(
 
     const file_path = "ucd/DerivedCoreProperties.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
@@ -597,7 +597,7 @@ fn parseBidiBrackets(
 
     const file_path = "ucd/BidiBrackets.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
@@ -663,7 +663,7 @@ fn parseEastAsianWidth(
 
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -739,7 +739,7 @@ fn parseGraphemeBreak(
 
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -789,7 +789,7 @@ fn parseEmojiData(
 
     const file_path = "ucd/emoji/emoji-data.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);
@@ -839,7 +839,7 @@ fn parseBlocks(
 
     const file_path = "ucd/Blocks.txt";
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024);

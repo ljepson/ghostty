@@ -156,7 +156,7 @@ pub const RepeatableReadableIO = struct {
     const Self = @This();
 
     // Allocator for the list is the arena for the parent config.
-    list: std.ArrayListUnmanaged(ReadableIO) = .{},
+    list: std.ArrayListUnmanaged(ReadableIO) = .{ .items = &[_]ReadableIO{}, .capacity = 0 },
 
     pub fn parseCLI(
         self: *Self,

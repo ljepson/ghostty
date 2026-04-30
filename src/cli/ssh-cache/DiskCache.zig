@@ -96,13 +96,13 @@ pub fn add(
                 self.path,
                 .{ .mode = .read_write },
             );
-            errdefer existing_file.close();
+            errdefer std.fs.File.close(existing_file, std.Io.Threaded.global_single_threaded.io());
             try fixupPermissions(existing_file);
             break :blk existing_file;
         },
         else => return err,
     };
-    defer file.close();
+    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
 
     // Lock
     // Causes a compile failure in the Zig std library on Windows, see:
@@ -161,7 +161,7 @@ pub fn remove(
         error.FileNotFound => return,
         else => return err,
     };
-    defer file.close();
+    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
     try fixupPermissions(file);
 
     // Lock
@@ -205,7 +205,7 @@ pub fn contains(
         error.FileNotFound => return false,
         else => return err,
     };
-    defer file.close();
+    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
 
     // Read existing entries
     var entries = try readEntries(alloc, file);
@@ -278,7 +278,7 @@ pub fn list(
         error.FileNotFound => return .init(alloc),
         else => return err,
     };
-    defer file.close();
+    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
     return readEntries(alloc, file);
 }
 
@@ -415,7 +415,7 @@ test "disk cache clear" {
     var buf: [4096]u8 = undefined;
     {
         var file = try tmp.dir.createFile("cache", .{});
-        defer file.close();
+        defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
         var file_writer = file.writer(&buf);
         try file_writer.interface.writeAll("HELLO!");
     }
@@ -443,7 +443,7 @@ test "disk cache operations" {
     var buf: [4096]u8 = undefined;
     {
         var file = try tmp.dir.createFile("cache", .{});
-        defer file.close();
+        defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
         var file_writer = file.writer(&buf);
         const writer = &file_writer.interface;
         try writer.writeAll("HELLO!");

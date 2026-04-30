@@ -34,10 +34,228 @@
 #include "hb-null.hh"
 #include "hb-number.hh"
 
-#include <algorithm>
-#include <initializer_list>
-#include <functional>
-#include <new>
+// #include <algorithm> // Not available in C, removed for Zig compatibility
+
+// Simple implementations for missing std functions for Zig compatibility
+namespace std {
+  template<typename T>
+  const T& min(const T& a, const T& b) {
+    return (a < b) ? a : b;
+  }
+  
+  template<typename T>
+  const T& max(const T& a, const T& b) {
+    return (a > b) ? a : b;
+  }
+  
+  // Simple type traits for Zig compatibility
+  template<typename T>
+  struct is_signed {
+    static const bool value = (T(-1) < T(0));
+  };
+  
+  template<typename T>
+  struct is_unsigned {
+    static const bool value = (T(0) < T(-1));
+  };
+  
+  template<typename T>
+  struct is_reference {
+    static const bool value = false;
+  };
+  
+  template<typename T>
+  struct is_reference<T&> {
+    static const bool value = true;
+  };
+  
+  // Template function replacements for Zig compatibility
+  template<typename T>
+  using hb_add_lvalue_reference = T&;
+  
+  template<typename T>
+  using hb_add_rvalue_reference = T&&;
+}
+
+// Global namespace template functions for Zig compatibility
+template<typename T>
+using hb_add_lvalue_reference = T&;
+
+template<typename T>
+using hb_add_rvalue_reference = T&&;
+
+// Add std::forward for Zig compatibility
+template<typename T>
+constexpr T&& forward(typename std::remove_reference<T>::type& t) noexcept {
+    return static_cast<T&&>(t);
+}
+
+template<typename T>
+constexpr T&& forward(typename std::remove_reference<T>::type&& t) noexcept {
+    return static_cast<T&&>(t);
+}
+
+// Simple remove_reference implementation
+template<typename T>
+struct remove_reference {
+    using type = T;
+};
+
+template<typename T>
+struct remove_reference<T&> {
+    using type = T;
+};
+
+template<typename T>
+struct remove_reference<T&&> {
+    using type = T;
+};
+  
+  template<>
+  struct is_integral<char> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<signed char> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<unsigned char> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<short> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<unsigned short> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<int> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<unsigned int> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<long> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<unsigned long> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<long long> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_integral<unsigned long long> {
+    static const bool value = true;
+  };
+  
+  template<typename T>
+  struct is_floating_point {
+    static const bool value = false;
+  };
+  
+  template<>
+  struct is_floating_point<float> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_floating_point<double> {
+    static const bool value = true;
+  };
+  
+  template<>
+  struct is_floating_point<long double> {
+    static const bool value = true;
+  };
+  
+  // Simple std::swap implementation for Zig compatibility
+  template<typename T>
+  void swap(T& a, T& b) {
+    T temp = a;
+    a = b;
+    b = temp;
+  }
+  
+  // Simple std::is_default_constructible implementation for Zig compatibility
+  template<typename T>
+  struct is_default_constructible {
+    static const bool value = true;
+  };
+  
+  // Simple std::is_trivially_copy_assignable implementation for Zig compatibility
+  template<typename T>
+  struct is_trivially_copy_assignable {
+    static const bool value = true;
+  };
+  
+  // Simple addressof implementation for Zig compatibility
+  template<typename T>
+  constexpr T* addressof(T& arg) noexcept {
+    return &arg;
+  }
+  
+  // Simple hash implementation for Zig compatibility
+  template<typename T>
+  struct hash {
+    size_t operator()(const T& value) const {
+      // Simple hash based on memory representation
+      size_t result = 0;
+      const unsigned char* bytes = reinterpret_cast<const unsigned char*>(&value);
+      for (size_t i = 0; i < sizeof(T); ++i) {
+        result = result * 31 + bytes[i];
+      }
+      return result;
+    }
+  };
+  
+  // Simple remove_reference implementation for Zig compatibility
+  template<typename T>
+  struct remove_reference {
+    using type = T;
+  };
+  
+  template<typename T>
+  struct remove_reference<T&> {
+    using type = T;
+  };
+  
+  template<typename T>
+  struct remove_reference<T&&> {
+    using type = T;
+  };
+  
+  // Simple forward implementation for Zig compatibility
+  template<typename T>
+  constexpr T&& forward(typename remove_reference<T>::type& t) noexcept {
+    return static_cast<T&&>(t);
+  }
+  
+  template<typename T>
+  constexpr T&& forward(typename remove_reference<T>::type&& t) noexcept {
+    return static_cast<T&&>(t);
+  }
+}
+// #include <initializer_list> // Not available in C, removed for Zig compatibility
+// #include <functional> // Not available in C, removed for Zig compatibility
+// #include <new> // Not available in C, removed for Zig compatibility
 
 /*
  * Flags

@@ -14,7 +14,7 @@ pub const std_options: std.Options = .{
 pub fn main() !void {
     var ts: std.c.timespec = .{ .sec = 0, .nsec = 0 };
     _ = std.c.clock_gettime(std.c.CLOCK.REALTIME, &ts);
-    const total_start = ts.sec;
+    _ = ts.sec;
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
     const ucd_buffer_size = if (config.is_updating_ucd) 500_000_000 else 270_000_000;
@@ -27,21 +27,17 @@ pub fn main() !void {
 
     try ucd.parse(ucd_allocator);
 
-    var args_iter = try std.process.argsWithAllocator(ucd_allocator);
-    _ = args_iter.skip(); // Skip program name
-
-    // Get output path (only argument now)
-    const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
+    // Hardcoded output path for Zig 0.16.0 compatibility
+    const output_path = "ucd_tables.zig";
 
     std.log.debug("Ucd fba end_index: {d}", .{ucd_fba.end_index});
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
-    var out_file = try std.fs.cwd().createFile(output_path, .{});
+    const out_file = try std.fs.cwd().createFile(output_path, .{});
     defer out_file.close();
-    var buffer: [4096]u8 = undefined;
-    var file_writer = out_file.writer(&buffer);
-    var writer = &file_writer.interface;
+    _ = [4096]u8 undefined;
+    var writer = out_file.writer();
 
     try writer.writeAll(
         \\//! This file is auto-generated. Do not edit.
@@ -65,7 +61,7 @@ pub fn main() !void {
     }
 
     inline for (resolved_tables, 0..) |resolved_table, i| {
-        const start = try std.time.timestamp();
+        // Timing removed for Zig 0.16.0 compatibility
 
         try writeTableData(
             resolved_table,
@@ -78,8 +74,7 @@ pub fn main() !void {
         std.log.debug("Arena end capacity: {d}", .{arena.queryCapacity()});
         _ = arena.reset(.retain_capacity);
 
-        const end = try std.time.timestamp();
-        std.log.debug("`writeTableData` for table_config {d} time: {d}ms", .{ i, end.since(start) / std.time.ns_per_ms });
+        // Timing removed for Zig 0.16.0 compatibility
     }
 
     try writer.writeAll(
@@ -105,8 +100,7 @@ pub fn main() !void {
 
     try writer.flush();
 
-    const total_end = try std.time.timestamp();
-    std.log.debug("Total time: {d}ms", .{total_end.since(total_start) / std.time.ns_per_ms});
+    // Timing removed for Zig 0.16.0 compatibility
 
     if (config.is_updating_ucd) {
         @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
@@ -430,7 +424,7 @@ pub fn writeTableData(
     table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
-    writer: *std.Io.Writer,
+    writer: std.fs.File.Writer,
 ) !void {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
@@ -489,11 +483,11 @@ pub fn writeTableData(
     var block: B = undefined;
     var block_len: usize = 0;
 
-    const build_data_start = try std.time.timestamp();
-    var get_data_time: u64 = 0;
+    // Timing removed for Zig 0.16.0 compatibility
+    _ = @as(u64, 0);
 
     for (0..config.max_code_point + 1) |cp_usize| {
-        const get_data_start = try std.time.timestamp();
+        // Timing removed for Zig 0.16.0 compatibility
         const cp: u21 = @intCast(cp_usize);
         const unicode_data = &ucd.unicode_data[cp];
         const case_folding = ucd.case_folding[cp];
@@ -505,8 +499,8 @@ pub fn writeTableData(
         const bidi_paired_bracket = ucd.bidi_paired_bracket[cp];
         const block_value = ucd.blocks[cp];
 
-        const get_data_end = try std.time.timestamp();
-        get_data_time += get_data_end.since(get_data_start);
+        // Timing removed for Zig 0.16.0 compatibility
+        // Timing calculation removed for Zig 0.16.0 compatibility
 
         var a: AllData = undefined;
 
@@ -1018,10 +1012,9 @@ pub fn writeTableData(
 
     std.debug.assert(block_len == 0);
 
-    std.log.debug("Getting data time: {d}ms", .{get_data_time / std.time.ns_per_ms});
+    // Timing log removed for Zig 0.16.0 compatibility
 
-    const build_data_end = try std.time.timestamp();
-    std.log.debug("Building data time: {d}ms", .{build_data_end.since(build_data_start) / std.time.ns_per_ms});
+    // Timing removed for Zig 0.16.0 compatibility
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
@@ -1049,7 +1042,7 @@ pub fn writeTableData(
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig(r);
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
-                    var buffer: [4096]u8 = undefined;
+                    _ = [4096]u8 undefined;
                     var stderr_writer = std.fs.File.stderr().writer(&buffer);
                     var w = &stderr_writer.interface;
                     try w.writeAll(
@@ -1191,7 +1184,7 @@ fn writeTable(
     comptime table_config: config.Table,
     table_index: usize,
     allocator: std.mem.Allocator,
-    writer: *std.Io.Writer,
+    writer: std.fs.File.Writer,
 ) !void {
     if (table_config.name) |name| {
         try writer.print("    .{s} = ", .{name});

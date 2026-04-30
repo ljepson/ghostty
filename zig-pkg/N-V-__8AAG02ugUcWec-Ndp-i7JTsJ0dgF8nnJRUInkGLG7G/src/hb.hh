@@ -192,18 +192,18 @@
 #include "hb-aat.h"
 #define HB_AAT_H_IN
 
-#include <cassert>
-#include <cfloat>
-#include <climits>
+#include <assert.h>
+#include <float.h>
+#include <limits.h>
 #if defined(_MSC_VER) && !defined(_USE_MATH_DEFINES)
 # define _USE_MATH_DEFINES
 #endif
-#include <cmath>
-#include <cstdarg>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <math.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #if (defined(_MSC_VER) && _MSC_VER >= 1500) || defined(__MINGW32__)
 #ifdef __MINGW32_VERSION
@@ -411,7 +411,7 @@
 #endif
 
 #ifndef HB_NO_ERRNO
-#  include <cerrno>
+#  include <errno.h>
 #else
 static int HB_UNUSED _hb_errno = 0;
 #  undef errno
@@ -539,7 +539,7 @@ extern "C" void  hb_free_impl(void *ptr);
 /* Headers we include for everyone.  Keep topologically sorted by dependency.
  * They express dependency amongst themselves, but no other file should include
  * them directly.*/
-#include "hb-cplusplus.hh"
+// #include "hb-cplusplus.hh" // Removed for Zig compatibility
 #include "hb-meta.hh"
 #include "hb-mutex.hh"
 #include "hb-number.hh"

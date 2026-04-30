@@ -213,11 +213,11 @@ fn writeAutoThemeFile(alloc: std.mem.Allocator, theme_name: []const u8) !void {
         try std.fs.cwd().makePath(dir);
     }
 
-    var f = try std.fs.createFileAbsolute(auto_path, .{ .truncate = true });
-    defer f.close();
+    const f = try std.fs.createFileAbsolute(auto_path, .{ .truncate = true });
+    defer std.fs.File.close(f, std.Io.Threaded.global_single_threaded.io());
 
     var buf: [128]u8 = undefined;
-    var w = f.writer(&buf);
+    var w = std.Io.File.writer(f, std.Io.Threaded.global_single_threaded.io(), &buf);
     try w.interface.print("theme = {s}\n", .{theme_name});
     try w.interface.flush();
 }

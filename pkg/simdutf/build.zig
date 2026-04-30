@@ -40,8 +40,8 @@ pub fn build(b: *std.Build) !void {
             lib.root_module.linkSystemLibrary("c++", .{ .use_pkg_config = .no });
         }
         // Add system include paths for Zig 0.16.0 fallback SDK
-        lib.root_module.addIncludePath(b.path("/usr/include"));
-        lib.root_module.addIncludePath(b.path("/usr/local/include"));
+        lib.root_module.addIncludePath(.{ .cwd_relative = "/usr/include" });
+        lib.root_module.addIncludePath(.{ .cwd_relative = "/usr/local/include" });
     } else {
         // Add system library linking for cross-compilation
         lib.root_module.linkSystemLibrary("c", .{});

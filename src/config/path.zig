@@ -195,7 +195,7 @@ pub const Path = union(enum) {
             return;
         }
 
-        var dir = try std.fs.openDirAbsolute(base, .{});
+        var dir = try std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, base, .{});
         defer dir.close();
 
         const abs = dir.realpath(path, &buf) catch |err| abs: {
@@ -357,7 +357,7 @@ pub const Path = union(enum) {
 /// be automatically expanded relative to the path of the config file (or the home
 /// directory).
 pub const RepeatablePath = struct {
-    value: std.ArrayListUnmanaged(Path) = .{},
+    value: std.ArrayListUnmanaged(Path) = .{ .items = &[_]Path{}, .capacity = 0 },
 
     pub fn parseCLI(self: *RepeatablePath, alloc: Allocator, input: ?[]const u8) ParseError!void {
         const item = try Path.parse(alloc, input) orelse {

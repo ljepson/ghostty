@@ -3809,7 +3809,7 @@ _conditional_state: conditional.State = .{},
 
 /// The conditional keys that are used at any point during the configuration
 /// loading. This is used to speed up the conditional evaluation process.
-_conditional_set: std.EnumSet(conditional.Key) = .{},
+_conditional_set: std.EnumSet(conditional.Key) = std.EnumSet(conditional.Key).initEmpty(),
 
 /// The steps we can use to reload the configuration after it has been loaded
 /// without reopening the files. This is used in very specific cases such
@@ -4004,9 +4004,9 @@ fn writeConfigTemplate(path: []const u8) !void {
         try std.fs.cwd().makePath(dir_path);
     }
     const file = try std.fs.createFileAbsolute(path, .{});
-    defer file.close();
+    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
     var buf: [4096]u8 = undefined;
-    var file_writer = file.writer(&buf);
+    var file_writer = std.Io.File.writer(file, std.Io.Threaded.global_single_threaded.io(), &buf);
     const writer = &file_writer.interface;
     try writer.print(
         @embedFile("./config-template"),
@@ -5665,8 +5665,8 @@ pub const BoldColor = union(enum) {
 pub const ColorList = struct {
     const Self = @This();
 
-    colors: std.ArrayListUnmanaged(Color) = .{},
-    colors_c: std.ArrayListUnmanaged(Color.C) = .{},
+    colors: std.ArrayListUnmanaged(Color) = .{ .items = &[_]Color{}, .capacity = 0 },
+    colors_c: std.ArrayListUnmanaged(Color.C) = .{ .items = &[_]Color.C{}, .capacity = 0 },
 
     /// ghostty_config_color_list_s
     pub const C = extern struct {
@@ -5987,7 +5987,7 @@ pub const RepeatableString = struct {
     const Self = @This();
 
     // Allocator for the list is the arena for the parent config.
-    list: std.ArrayListUnmanaged([:0]const u8) = .{},
+    list: std.ArrayListUnmanaged([:0]const u8) = .{ .items = &[_][:0]const u8{}, .capacity = 0 },
 
     // If true, then the next value will clear the list and start over
     // rather than append. This is a bit of a hack but is here to make
@@ -6301,7 +6301,7 @@ pub const RepeatableFontVariation = struct {
     const Self = @This();
 
     // Allocator for the list is the arena for the parent config.
-    list: std.ArrayListUnmanaged(fontpkg.face.Variation) = .{},
+    list: std.ArrayListUnmanaged(fontpkg.face.Variation) = .{ .items = &[_]fontpkg.face.Variation{}, .capacity = 0 },
 
     pub fn parseCLI(self: *Self, alloc: Allocator, input_: ?[]const u8) !void {
         const input = input_ orelse return error.ValueRequired;
@@ -8584,7 +8584,7 @@ pub const FontShapingBreak = packed struct {
 pub const RepeatableLink = struct {
     const Self = @This();
 
-    links: std.ArrayListUnmanaged(inputpkg.Link) = .{},
+    links: std.ArrayListUnmanaged(inputpkg.Link) = .{ .items = &[_]inputpkg.Link{}, .capacity = 0 },
 
     pub fn parseCLI(self: *Self, alloc: Allocator, input_: ?[]const u8) !void {
         _ = self;

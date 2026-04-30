@@ -10,18 +10,19 @@ const KeybindAction = @import("input/Binding.zig").Action;
 pub fn main() !void {
     const alloc = std.heap.page_allocator;
 
-    var stdout = std.fs.getStdOut();
-    const writer = &stdout.interface;
-    try writer.writeAll(
+    const stdout = std.Io.File.stdout();
+    var buffer: [4096]u8 = undefined;
+    var writer = std.Io.File.writer(stdout, std.Io.Threaded.global_single_threaded.io(), &buffer);
+    try writer.interface.writeAll(
         \\// THIS FILE IS AUTO GENERATED
         \\
         \\
     );
 
-    try genConfig(alloc, writer);
-    try genActions(alloc, writer);
-    try genKeybindActions(alloc, writer);
-    try stdout.end();
+    try genConfig(alloc, &writer.interface);
+    try genActions(alloc, &writer.interface);
+    try genKeybindActions(alloc, &writer.interface);
+    // stdout.end() not needed in Zig 0.16.0
 }
 
 fn genConfig(alloc: std.mem.Allocator, writer: *std.Io.Writer) !void {

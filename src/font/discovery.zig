@@ -967,7 +967,7 @@ pub const Windows = struct {
                                 continue;
                             };
                             self.system_path = path;
-                            self.dir = std.fs.openDirAbsoluteZ(
+                            self.dir = std.Io.Dir.openDirZ(std.Io.Dir.cwd(), std.Io.failing,
                                 path,
                                 .{ .iterate = true },
                             ) catch {
@@ -982,7 +982,7 @@ pub const Windows = struct {
                                 continue;
                             };
                             self.user_path = path;
-                            self.dir = std.fs.openDirAbsoluteZ(
+                            self.dir = std.Io.Dir.openDirZ(std.Io.Dir.cwd(), std.Io.failing,
                                 path,
                                 .{ .iterate = true },
                             ) catch {

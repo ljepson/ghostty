@@ -444,12 +444,9 @@ pub fn xcframework(
 
 /// Returns true if the Apple SDK for the given target is installed.
 fn detectAppleSDK(target: std.Target) bool {
-    _ = std.zig.LibCInstallation.findNative(std.heap.page_allocator, std.Io.Threaded.global_single_threaded.io(), .{
-        .target = &target,
-        .verbose = false,
-        .environ_map = @constCast(&std.process.Environ.Map.init(std.heap.page_allocator)),
-    }) catch return false;
-    return true;
+    _ = target; // For Zig 0.16.0 compatibility, always return true if Xcode is installed
+    // since we're using custom SDK paths in SharedDeps.zig
+    return std.process.runChild(std.heap.page_allocator, &.{"xcode-select", "--print-path"}, .{}) catch return false;
 }
 
 pub fn install(

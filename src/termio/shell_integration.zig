@@ -633,7 +633,7 @@ fn setupXdgDataDirs(
         "{s}/shell-integration",
         .{resource_dir},
     );
-    var integ_dir = std.fs.openDirAbsolute(integ_path, .{}) catch |err| {
+    var integ_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, integ_path, .{}) catch |err| {
         log.warn("unable to open {s}: {}", .{ integ_path, err });
         return false;
     };
@@ -910,7 +910,7 @@ fn setupZsh(
         "{s}/shell-integration/zsh",
         .{resource_dir},
     );
-    var integ_dir = std.fs.openDirAbsolute(integ_path, .{}) catch |err| {
+    var integ_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, integ_path, .{}) catch |err| {
         log.warn("unable to open {s}: {}", .{ integ_path, err });
         return null;
     };
