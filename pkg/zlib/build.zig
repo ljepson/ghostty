@@ -80,7 +80,7 @@ pub fn build(b: *std.Build) !void {
         const sdk_path = detectXcodeSDKPath(b.allocator) catch 
             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
         const include_path = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch unreachable;
-        lib.root_module.addSystemIncludePath(b.path(include_path));
+        lib.root_module.addSystemIncludePath(b.pathcwd_relative(include_path));
         lib.root_module.addIncludePath(b.path("/usr/local/include"));
     } else {
         // Enhanced system library linking for cross-compilation
@@ -95,7 +95,7 @@ pub fn build(b: *std.Build) !void {
         const sdk_path_cross = detectXcodeSDKPath(b.allocator) catch 
             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
         const include_path_cross = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path_cross}) catch unreachable;
-        lib.root_module.addSystemIncludePath(b.path(include_path_cross));
+        lib.root_module.addSystemIncludePath(b.path().cwd_relative(include_path_cross));
         lib.root_module.addIncludePath(b.path("/usr/local/include"));
     }
 
