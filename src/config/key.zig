@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("../lib/reify.zig");
 const Config = @import("Config.zig");
 
 /// Key is an enum of all the available configuration keys. This is used
@@ -21,7 +22,7 @@ pub const Key = key: {
     }
 
     _ = [_]std.builtin.Type.Declaration{};
-    break :key std.meta.Type(.{
+    break :key reify.Type(.{
         .@"enum" = .{
             .tag_type = std.math.IntFittingRange(0, field_infos.len - 1),
             .fields = enumFields[0..i],

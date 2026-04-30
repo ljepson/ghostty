@@ -22,7 +22,7 @@ pub fn main() !void {
     try genConfig(alloc, &writer.interface);
     try genActions(alloc, &writer.interface);
     try genKeybindActions(alloc, &writer.interface);
-    // stdout.end() not needed in Zig 0.16.0
+    try writer.interface.flush();
 }
 
 fn genConfig(alloc: std.mem.Allocator, writer: *std.Io.Writer) !void {

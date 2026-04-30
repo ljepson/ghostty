@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("../../lib/reify.zig");
 const testing = std.testing;
 
 pub const ParseError = error{
@@ -81,7 +82,7 @@ pub fn FormatStruct(comptime vars: []const Variable) type {
         };
     }
 
-    return std.meta.Type(.{ .@"struct" = .{
+    return reify.Type(.{ .@"struct" = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},

@@ -20,3 +20,7 @@ pub const Struct = lib.Struct;
 pub const String = lib.String;
 pub const checkGhosttyHEnum = lib.checkGhosttyHEnum;
 pub const structSizedFieldFits = lib.structSizedFieldFits;
+
+pub fn intToEnum(comptime E: type, value: anytype) error{InvalidEnumTag}!E {
+    return std.enums.fromInt(E, value) orelse error.InvalidEnumTag;
+}

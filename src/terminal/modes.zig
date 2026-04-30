@@ -8,6 +8,7 @@
 //! to ensure all our various types and logic remain in sync.
 
 const std = @import("std");
+const reify = @import("../lib/reify.zig");
 const testing = std.testing;
 
 /// A struct that maintains the state of all the settable modes.
@@ -112,7 +113,7 @@ pub const ModePacked = packed_struct: {
         };
     }
 
-    break :packed_struct std.meta.Type(.{ .@"struct" = .{
+    break :packed_struct reify.Type(.{ .@"struct" = .{
         .layout = .@"packed",
         .fields = &fields,
         .decls = &.{},
@@ -134,7 +135,7 @@ pub const Mode = mode_enum: {
         };
     }
 
-    break :mode_enum std.meta.Type(.{ .@"enum" = .{
+    break :mode_enum reify.Type(.{ .@"enum" = .{
         .tag_type = ModeTag.Backing,
         .fields = &fields,
         .decls = &.{},

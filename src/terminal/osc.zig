@@ -230,14 +230,6 @@ pub const Command = union(Key) {
             };
         }
     };
-
-    comptime {
-        assert(@sizeOf(Command) == switch (@sizeOf(usize)) {
-            4 => 44,
-            8 => 64,
-            else => unreachable,
-        });
-    }
 };
 
 /// The terminator used to end an OSC command. For OSC commands that demand

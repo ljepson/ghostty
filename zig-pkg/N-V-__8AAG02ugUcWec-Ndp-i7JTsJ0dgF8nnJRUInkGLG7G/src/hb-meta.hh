@@ -29,9 +29,9 @@
 
 #include "hb.hh"
 
-// #include <memory> // Removed for Zig compatibility
-// #include <type_traits> // Removed for Zig compatibility
-// #include <utility> // Removed for Zig compatibility
+#include <memory>
+#include <type_traits>
+#include <utility>
 
 
 /*
@@ -97,126 +97,55 @@ template <typename T> struct hb_match_reference		: hb_type_identity_t<T>, hb_fal
 template <typename T> struct hb_match_reference<T &>	: hb_type_identity_t<T>, hb_true_type	{};
 template <typename T> struct hb_match_reference<T &&>	: hb_type_identity_t<T>, hb_true_type	{};
 template <typename T> using hb_remove_reference = typename hb_match_reference<T>::type;
-// template <typename T> auto _hb_try_add_lvalue_reference (hb_priority<1>) -> hb_type_identity<T&>;
-// template <typename T> auto _hb_try_add_lvalue_reference (hb_priority<0>) -> hb_type_identity<T>;
-// template <typename T> using hb_add_lvalue_reference = decltype (_hb_try_add_lvalue_reference<T> (hb_prioritize));
-// template <typename T> auto _hb_try_add_rvalue_reference (hb_priority<1>) -> hb_type_identity<T&&>;
-// template <typename T> auto _hb_try_add_rvalue_reference (hb_priority<0>) -> hb_type_identity<T>;
-// template <typename T> using hb_add_rvalue_reference = decltype (_hb_try_add_rvalue_reference<T> (hb_prioritize));
+template <typename T> auto _hb_try_add_lvalue_reference (hb_priority<1>) -> hb_type_identity<T&>;
+template <typename T> auto _hb_try_add_lvalue_reference (hb_priority<0>) -> hb_type_identity<T>;
+template <typename T> using hb_add_lvalue_reference = decltype (_hb_try_add_lvalue_reference<T> (hb_prioritize));
+template <typename T> auto _hb_try_add_rvalue_reference (hb_priority<1>) -> hb_type_identity<T&&>;
+template <typename T> auto _hb_try_add_rvalue_reference (hb_priority<0>) -> hb_type_identity<T>;
+template <typename T> using hb_add_rvalue_reference = decltype (_hb_try_add_rvalue_reference<T> (hb_prioritize));
 
 template <typename T> struct hb_match_pointer		: hb_type_identity_t<T>, hb_false_type	{};
 template <typename T> struct hb_match_pointer<T *>	: hb_type_identity_t<T>, hb_true_type	{};
 template <typename T> using hb_remove_pointer = typename hb_match_pointer<T>::type;
-// template <typename T> auto _hb_try_add_pointer (hb_priority<1>) -> hb_type_identity<hb_remove_reference<T>*>;
-// template <typename T> auto _hb_try_add_pointer (hb_priority<1>) -> hb_type_identity<T>;
-// template <typename T> using hb_add_pointer = decltype (_hb_try_add_pointer<T> (hb_prioritize));
+template <typename T> auto _hb_try_add_pointer (hb_priority<1>) -> hb_type_identity<hb_remove_reference<T>*>;
+template <typename T> auto _hb_try_add_pointer (hb_priority<1>) -> hb_type_identity<T>;
+template <typename T> using hb_add_pointer = decltype (_hb_try_add_pointer<T> (hb_prioritize));
 
 
-// hb_decay implementation for Zig compatibility
-template <typename T>
-struct hb_decay {
-  using type = T;
-};
+template <typename T> using hb_decay = typename std::decay<T>::type;
 
-template <typename T>
-struct hb_decay<T&> {
-  using type = T;
-};
+#define hb_is_convertible(From,To) std::is_convertible<From, To>::value
 
-template <typename T>
-struct hb_decay<T&&> {
-  using type = T;
-};
-
-template <typename T>
-struct hb_decay<const T> {
-  using type = T;
-};
-
-template <typename T>
-struct hb_decay<const T&> {
-  using type = T;
-};
-
-template <typename T>
-struct hb_decay<const T&&> {
-  using type = T;
-};
-
-template <typename T>
-using hb_decay_t = typename hb_decay<T>::type;
-
-// hb_is_const implementation for Zig compatibility
-template <typename T>
-struct hb_is_const {
-  static const bool value = false;
-};
-
-template <typename T>
-struct hb_is_const<const T> {
-  static const bool value = true;
-};
-
-// hb_is_reference implementation for Zig compatibility
-template <typename T>
-struct hb_is_reference {
-  static const bool value = false;
-};
-
-template <typename T>
-struct hb_is_reference<T&> {
-  static const bool value = true;
-};
-
-// hb_is_convertible implementation for Zig compatibility
-template <typename From, typename To>
-struct hb_is_convertible {
-  static const bool value = false;
-};
-
-template <typename To>
-struct hb_is_convertible<To, To> {
-  static const bool value = true;
-};
-
-template <typename From, typename To>
-struct hb_is_convertible<From*, To*> {
-  static const bool value = hb_is_convertible<From, To>::value;
-};
-
-#define hb_is_convertible(From,To) hb_is_convertible<From, To>::value
-
-// hb_is_cr_convertible implementation for Zig compatibility
 template <typename From, typename To>
 using hb_is_cr_convertible = hb_bool_constant<
-  hb_is_same (hb_decay_t<From>, hb_decay_t<To>) &&
-  (!hb_is_const<From>::value || hb_is_const<To>::value) &&
-  (!hb_is_reference<To>::value || hb_is_const<To>::value || hb_is_reference<To>::value)
+  hb_is_same (hb_decay<From>, hb_decay<To>) &&
+  (!std::is_const<From>::value || std::is_const<To>::value) &&
+  (!std::is_reference<To>::value || std::is_const<To>::value || std::is_reference<To>::value)
 >;
 #define hb_is_cr_convertible(From,To) hb_is_cr_convertible<From, To>::value
 
 
-// struct // Removed for Zig compatibility
-// {
-//   template <typename T> constexpr auto
-//   operator () (T&& v) const HB_AUTO_RETURN (std::forward<T> (v))
+struct
+{
+  template <typename T> constexpr auto
+  operator () (T&& v) const HB_AUTO_RETURN (std::forward<T> (v))
 
-//   template <typename T> constexpr auto
-//   operator () (T *v) const HB_AUTO_RETURN (*v)
+  template <typename T> constexpr auto
+  operator () (T *v) const HB_AUTO_RETURN (*v)
 
-//   template <typename T> constexpr auto
-//   operator () (const hb::shared_ptr<T>& v) const HB_AUTO_RETURN (*v)
+  template <typename T> constexpr auto
+  operator () (const hb::shared_ptr<T>& v) const HB_AUTO_RETURN (*v)
 
-//   template <typename T> constexpr auto
-//   operator () (hb::shared_ptr<T>& v) const HB_AUTO_RETURN (*v)
-//   
-//   template <typename T> constexpr auto
-//   operator () (const hb::unique_ptr<T>& v) const HB_AUTO_RETURN (*v)
+  template <typename T> constexpr auto
+  operator () (hb::shared_ptr<T>& v) const HB_AUTO_RETURN (*v)
+  
+  template <typename T> constexpr auto
+  operator () (const hb::unique_ptr<T>& v) const HB_AUTO_RETURN (*v)
 
-//   template <typename T> constexpr auto
-//   operator () (hb::unique_ptr<T>& v) const HB_AUTO_RETURN (*v)
-// }
-// HB_FUNCOBJ (hb_deref);
+  template <typename T> constexpr auto
+  operator () (hb::unique_ptr<T>& v) const HB_AUTO_RETURN (*v)
+}
+HB_FUNCOBJ (hb_deref);
 
 template <typename T>
 struct hb_reference_wrapper

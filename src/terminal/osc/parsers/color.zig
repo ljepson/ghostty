@@ -1,4 +1,5 @@
 const std = @import("std");
+const lib = @import("../../lib.zig");
 const Allocator = std.mem.Allocator;
 
 const DynamicColor = @import("../../color.zig").Dynamic;
@@ -182,7 +183,7 @@ fn parseGetSetAnsiColor(
         // Parse the color.
         const target: Target = switch (op) {
             // OSC5 maps directly to the Special enum.
-            .osc_5 => .{ .special = std.meta.intToEnum(
+            .osc_5 => .{ .special = lib.intToEnum(
                 SpecialColor,
                 std.math.cast(u3, color) orelse return result,
             ) catch return result },
@@ -191,7 +192,7 @@ fn parseGetSetAnsiColor(
             // by the palette count.
             .osc_4 => if (std.math.cast(u8, color)) |idx| .{
                 .palette = idx,
-            } else .{ .special = std.meta.intToEnum(
+            } else .{ .special = lib.intToEnum(
                 SpecialColor,
                 std.math.cast(u3, color - 256) orelse return result,
             ) catch return result },
@@ -255,7 +256,7 @@ fn parseResetAnsiColor(
         // Parse the color.
         const target: Target = switch (op) {
             // OSC105 maps directly to the Special enum.
-            .osc_105 => .{ .special = std.meta.intToEnum(
+            .osc_105 => .{ .special = lib.intToEnum(
                 SpecialColor,
                 std.math.cast(u3, color) orelse continue,
             ) catch continue },
@@ -264,7 +265,7 @@ fn parseResetAnsiColor(
             // by the palette count.
             .osc_104 => if (std.math.cast(u8, color)) |idx| .{
                 .palette = idx,
-            } else .{ .special = std.meta.intToEnum(
+            } else .{ .special = lib.intToEnum(
                 SpecialColor,
                 std.math.cast(u3, color - 256) orelse continue,
             ) catch continue },
@@ -329,10 +330,40 @@ fn parseResetDynamicColor(
 /// The exact prealloc value is chosen arbitrarily assuming most
 /// color ops have very few. If we can get empirical data on more
 /// typical values we can switch to that.
-pub const List = std.SegmentedList(
-    Request,
-    2,
-);
+pub const List = struct {
+    items: std.ArrayList(Request) = .empty,
+
+    pub fn deinit(self: *List, alloc: Allocator) void {
+        self.items.deinit(alloc);
+    }
+
+    pub fn addOne(self: *List, alloc: Allocator) Allocator.Error!*Request {
+        return self.items.addOne(alloc);
+    }
+
+    pub fn count(self: List) usize {
+        return self.items.items.len;
+    }
+
+    pub fn at(self: *List, i: usize) *Request {
+        return &self.items.items[i];
+    }
+
+    pub fn constIterator(self: *const List, start: usize) ConstIterator {
+        return .{ .items = self.items.items, .index = start };
+    }
+
+    pub const ConstIterator = struct {
+        items: []const Request,
+        index: usize,
+
+        pub fn next(self: *ConstIterator) ?*const Request {
+            if (self.index >= self.items.len) return null;
+            defer self.index += 1;
+            return &self.items[self.index];
+        }
+    };
+};
 
 /// A single operation related to the terminal color palette.
 pub const Request = union(enum) {
@@ -450,7 +481,7 @@ test "OSC 4:" {
 
     // Test every special color
     for (0..@typeInfo(SpecialColor).@"enum".fields.len) |i| {
-        const special = try std.meta.intToEnum(SpecialColor, i);
+        const special = try lib.intToEnum(SpecialColor, i);
 
         // Simple color set
         // printf '\e]4;256;red\\'
@@ -482,7 +513,7 @@ test "OSC 5:" {
 
     // Test every special color
     for (0..@typeInfo(SpecialColor).@"enum".fields.len) |i| {
-        const special = try std.meta.intToEnum(SpecialColor, i);
+        const special = try lib.intToEnum(SpecialColor, i);
 
         // Simple color set
         // printf '\e]4;256;red\\'
@@ -592,7 +623,7 @@ test "OSC 104:" {
 
     // Test every special color
     for (0..@typeInfo(SpecialColor).@"enum".fields.len) |i| {
-        const special = try std.meta.intToEnum(SpecialColor, i);
+        const special = try lib.intToEnum(SpecialColor, i);
 
         // Simple color set
         // printf '\e]104;256\\'

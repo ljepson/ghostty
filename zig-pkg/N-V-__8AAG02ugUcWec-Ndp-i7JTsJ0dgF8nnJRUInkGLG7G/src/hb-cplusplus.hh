@@ -29,18 +29,8 @@
 
 #ifdef __cplusplus
 
-// #include <functional> // Removed for Zig compatibility
-// #include <utility> // Removed for Zig compatibility
-
-// Simple std::swap implementation for Zig compatibility
-namespace std {
-  template<typename T>
-  void swap(T& a, T& b) {
-    T temp = a;
-    a = b;
-    b = temp;
-  }
-}
+#include <functional>
+#include <utility>
 
 #if 0
 #if !(__cplusplus >= 201103L)

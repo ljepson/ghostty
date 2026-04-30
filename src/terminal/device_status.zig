@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("../lib/reify.zig");
 const lib = @import("lib.zig");
 
 /// The color scheme reported in response to a CSI ? 996 n query.
@@ -21,7 +22,7 @@ pub const Request = dsr_enum: {
         };
     }
 
-    break :dsr_enum std.meta.Type(.{ .@"enum" = .{
+    break :dsr_enum reify.Type(.{ .@"enum" = .{
         .tag_type = Tag.Backing,
         .fields = &fields,
         .decls = &.{},

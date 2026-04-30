@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("reify.zig");
 const testing = std.testing;
 const Target = @import("target.zig").Target;
 
@@ -87,7 +88,7 @@ pub fn TaggedUnion(
                 .alignment = @alignOf(Padding),
             };
 
-            break :cvalue std.meta.Type(.{ .@"union" = .{
+            break :cvalue reify.Type(.{ .@"union" = .{
                 .layout = .@"extern",
                 .tag_type = null,
                 .fields = &union_fields,

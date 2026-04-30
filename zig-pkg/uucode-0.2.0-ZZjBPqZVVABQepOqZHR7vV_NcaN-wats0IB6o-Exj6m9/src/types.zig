@@ -2,7 +2,44 @@ const std = @import("std");
 const config = @import("config.zig");
 const inlineAssert = config.quirks.inlineAssert;
 
-pub extern var output_fd: usize;
+pub fn reifyType(comptime info: std.builtin.Type) type {
+    return switch (info) {
+        .@"enum" => |e| reifyEnum(e),
+        .@"union" => |u| reifyUnion(u),
+        else => @compileError("unsupported type info: " ++ @tagName(info)),
+    };
+}
+
+fn reifyEnum(comptime info: std.builtin.Type.Enum) type {
+    comptime var field_names: [info.fields.len][]const u8 = undefined;
+    comptime var field_values: [info.fields.len]info.tag_type = undefined;
+
+    for (info.fields, 0..) |field, i| {
+        field_names[i] = field.name;
+        field_values[i] = @intCast(field.value);
+    }
+
+    return @Enum(
+        info.tag_type,
+        if (info.is_exhaustive) .exhaustive else .nonexhaustive,
+        &field_names,
+        &field_values,
+    );
+}
+
+fn reifyUnion(comptime info: std.builtin.Type.Union) type {
+    comptime var field_names: [info.fields.len][]const u8 = undefined;
+    comptime var field_types: [info.fields.len]type = undefined;
+    comptime var field_attrs: [info.fields.len]std.builtin.Type.UnionField.Attributes = undefined;
+
+    for (info.fields, 0..) |field, i| {
+        field_names[i] = field.name;
+        field_types[i] = field.type;
+        field_attrs[i] = .{ .@"align" = field.alignment };
+    }
+
+    return @Union(info.layout, info.tag_type, &field_names, &field_types, &field_attrs);
+}
 
 fn formatAll(comptime fmt: []const u8, args: anytype) !void {
     var buf: [4096]u8 = undefined;
@@ -13,7 +50,7 @@ fn formatAll(comptime fmt: []const u8, args: anytype) !void {
 fn writeAll(bytes: []const u8) !void {
     var offset: usize = 0;
     while (offset < bytes.len) {
-        const n = std.os.linux.write(output_fd, bytes[offset..].ptr, bytes[offset..].len);
+        const n = std.os.linux.write(@import("root").output_fd, bytes[offset..].ptr, bytes[offset..].len);
         if (n == 0) return error.WriteZero;
         offset += n;
     }
@@ -940,33 +977,27 @@ pub fn writeDataItems(comptime D: type, data_items: []const D) !void {
     if (@typeInfo(D).@"struct".layout == .@"packed") {
         const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
 
-        try formatAll("@bitCast([_]{s}){{", .{@typeName(IntEquivalent)});
+        try formatAll("@bitCast([{d}]{s}{{", .{ data_items.len, @typeName(IntEquivalent) });
 
         for (data_items) |item| {
             try formatAll("{d},", .{@as(IntEquivalent, @bitCast(item))});
         }
 
-        try formatAll(
-            \\}};
+        try writeAll(
+            \\});
             \\
-            ++ ".{}"
-        ,
-        .{});
+        );
     } else {
-        try formatAll(
-            \\.{{
+        try writeAll(
+            \\.{
             \\
-            ++ ".{}"
-        ,
-        .{});
+        );
 
         for (data_items) |item| {
-            try formatAll(
-                \\.{{
+            try writeAll(
+                \\.{
                 \\
-                ++ ".{}"
-            ,
-            .{});
+            );
 
             inline for (@typeInfo(D).@"struct".fields) |field| {
                 try formatAll("    .{s} = ", .{field.name});
@@ -976,20 +1007,16 @@ pub fn writeDataItems(comptime D: type, data_items: []const D) !void {
                 try formatAll(",\n", .{});
             }
 
-            try formatAll(
-                \\}},
+            try writeAll(
+                \\},
                 \\
-                ++ ".{}"
-            ,
-            .{});
+            );
         }
 
-        try formatAll(
-            \\}};
+        try writeAll(
+            \\};
             \\
-            ++ ".{}"
-        ,
-        .{});
+        );
     }
 }
 
@@ -997,7 +1024,10 @@ pub fn writeDataFieldStr(comptime F: type, field: F) !void {
     switch (@typeInfo(F)) {
         .@"struct" => {
             if (@hasDecl(F, "write")) {
-                try field.write();
+                var writer: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
+                defer writer.deinit();
+                try field.write(&writer.writer);
+                try writeAll(writer.written());
             } else {
                 try formatAll("{}", .{field});
             }
@@ -1015,7 +1045,7 @@ pub fn writeDataFieldStr(comptime F: type, field: F) !void {
         .@"union" => {
             switch (field) {
                 inline else => |v, tag| {
-                    if (@typeInfo(std.meta.TypeOf(v)) == .void) {
+                    if (@typeInfo(@TypeOf(v)) == .void) {
                         try formatAll(".{s}", .{@tagName(tag)});
                     } else {
                         try formatAll("{}", .{field});
@@ -1506,7 +1536,7 @@ pub const UnionShiftTracking = struct {
 
     pub fn track(self: *UnionShiftTracking, cp: u21, value: anytype) void {
         switch (value) {
-            inline else => |v| if (std.meta.TypeOf(v) == u21) self.shift.track(cp, v),
+            inline else => |v| if (@TypeOf(v) == u21) self.shift.track(cp, v),
         }
     }
 
@@ -1767,7 +1797,7 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
         @compileError("Shift can only be used in unions with at least one field of type u21");
     }
 
-    const InnerUnion = std.meta.Type(.{
+    const InnerUnion = reifyType(.{
         .@"union" = .{
             .layout = if (packing == .@"packed") .@"packed" else .auto,
             .tag_type = if (packing == .@"packed") null else Tag,
@@ -1923,9 +1953,9 @@ pub fn fieldInit(
     tracking: anytype,
     d: anytype,
 ) void {
-    const F = @FieldType(@typeInfo(std.meta.TypeOf(data)).pointer.child, field);
-    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift") and std.meta.TypeOf(F.unshift) != void) {
-        if (@typeInfo(std.meta.TypeOf(d)) == .optional) {
+    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
+    if (@typeInfo(F) == .@"struct" and @hasDecl(F, "unshift") and @TypeOf(F.unshift) != void) {
+        if (@typeInfo(@TypeOf(d)) == .optional) {
             @field(data, field) = .initOptional(
                 cp,
                 d,
@@ -1941,9 +1971,9 @@ pub fn fieldInit(
     } else {
         @field(data, field) = d;
     }
-    const Tracking = @typeInfo(std.meta.TypeOf(tracking)).pointer.child;
+    const Tracking = @typeInfo(@TypeOf(tracking)).pointer.child;
     if (@hasField(Tracking, field)) {
-        if (@typeInfo(std.meta.TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
+        if (@typeInfo(@TypeOf(@FieldType(Tracking, field).track)).@"fn".params.len == 3) {
             @field(tracking, field).track(cp, d);
         } else {
             @field(tracking, field).track(d);
@@ -1962,7 +1992,7 @@ pub fn sliceFieldInit(
     tracking: anytype,
     d: anytype,
 ) Allocator.Error!void {
-    const F = @FieldType(@typeInfo(std.meta.TypeOf(data)).pointer.child, field);
+    const F = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
     if (F.T == u21) {
         @field(data, field) = try .initFor(
             allocator,

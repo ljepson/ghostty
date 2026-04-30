@@ -34,9 +34,13 @@
 #include "hb-null.hh"
 #include "hb-number.hh"
 
-// #include <algorithm> // Not available in C, removed for Zig compatibility
+#include <algorithm>
+#include <initializer_list>
+#include <functional>
+#include <new>
 
 // Simple implementations for missing std functions for Zig compatibility
+#if 0
 namespace std {
   template<typename T>
   const T& min(const T& a, const T& b) {
@@ -253,9 +257,7 @@ struct remove_reference<T&&> {
     return static_cast<T&&>(t);
   }
 }
-// #include <initializer_list> // Not available in C, removed for Zig compatibility
-// #include <functional> // Not available in C, removed for Zig compatibility
-// #include <new> // Not available in C, removed for Zig compatibility
+#endif
 
 /*
  * Flags

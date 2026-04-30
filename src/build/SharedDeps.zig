@@ -1088,7 +1088,6 @@ pub fn gtkNgDistResources(
                 .target = b.graph.host,
             }),
         });
-        // linkLibC is automatic in Zig 0.16.0
         blueprint_exe.root_module.linkSystemLibrary("gtk4", dynamic_link_opts);
         blueprint_exe.root_module.linkSystemLibrary("libadwaita-1", dynamic_link_opts);
 

@@ -102,7 +102,7 @@ pub fn set(
     value: ?*const anyopaque,
 ) callconv(lib.calling_conv) Result {
     if (comptime std.debug.runtime_safety) {
-        _ = std.meta.intToEnum(Option, @intFromEnum(option)) catch {
+        _ = lib.intToEnum(Option, @intFromEnum(option)) catch {
             return .invalid_value;
         };
     }
@@ -197,18 +197,10 @@ pub fn logFn(
     const scope_text: []const u8 = if (scope == .default) "" else @tagName(scope);
     const c_level = LogLevel.fromStd(level);
 
-    var ctx: LogEmitter = .{
-        .c_level = c_level,
-        .scope_text = scope_text,
-    };
-    const writer: std.io.GenericWriter(
-        *LogEmitter,
-        error{},
-        LogEmitter.write,
-    ) = .{ .context = &ctx };
-
-    nosuspend writer.print(format, args) catch {};
-    ctx.flush();
+    var writer: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
+    defer writer.deinit();
+    nosuspend writer.writer.print(format, args) catch return;
+    emitLog(c_level, scope_text, writer.written());
 }
 
 /// Built-in log callback that writes to stderr.
@@ -239,8 +231,9 @@ pub fn logStderr(
     };
 
     var buffer: [64]u8 = undefined;
-    const writer = std.debug.lockStderrWriter(&buffer);
-    defer std.debug.unlockStderrWriter();
+    const stderr = std.debug.lockStderr(&buffer);
+    defer std.debug.unlockStderr();
+    const writer = stderr.file_writer.interface;
     nosuspend {
         if (scope.len > 0) {
             writer.print("[{s}]({s}): {s}\n", .{ level_text, scope, message }) catch {};

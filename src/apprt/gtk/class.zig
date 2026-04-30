@@ -2,6 +2,7 @@
 //! along with helpers to work with them.
 
 const std = @import("std");
+const reify = @import("../../lib/reify.zig");
 const glib = @import("glib");
 const gobject = @import("gobject");
 const gtk = @import("gtk");
@@ -148,7 +149,7 @@ pub fn Common(
                     var params: [fn_info.params.len]std.builtin.Type.Fn.Param = undefined;
                     @memcpy(&params, fn_info.params);
                     params[0].type = *ClassInstance(T);
-                    return std.meta.Type(.{ .@"fn" = .{
+                    return reify.Type(.{ .@"fn" = .{
                         .calling_convention = fn_info.calling_convention,
                         .is_generic = fn_info.is_generic,
                         .is_var_args = fn_info.is_var_args,

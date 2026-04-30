@@ -1,6 +1,7 @@
 //! Inter-process Communication to a running Ghostty instance from a separate
 //! process.
 const std = @import("std");
+const reify = @import("../lib/reify.zig");
 const Allocator = std.mem.Allocator;
 const assert = @import("../quirks.zig").inlineAssert;
 const lib = @import("../lib/main.zig");
@@ -139,7 +140,7 @@ pub const Action = union(enum) {
             };
         }
 
-        break :cvalue std.meta.Type(.{ .@"union" = .{
+        break :cvalue reify.Type(.{ .@"union" = .{
             .layout = .@"extern",
             .tag_type = null,
             .fields = &union_fields,

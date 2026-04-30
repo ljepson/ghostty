@@ -545,7 +545,7 @@ pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []co
     if (@typeInfo(D).@"struct".layout == .@"packed") {
         const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
 
-        try writer.print("@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
+        try writer.print("@bitCast([{d}]{s}{{\n", .{ data_items.len, @typeName(IntEquivalent) });
 
         for (data_items) |item| {
             try writer.print("{d},", .{@as(IntEquivalent, @bitCast(item))});

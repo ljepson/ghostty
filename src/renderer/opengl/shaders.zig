@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("../../lib/reify.zig");
 const Allocator = std.mem.Allocator;
 const assert = @import("../../quirks.zig").inlineAssert;
 const math = @import("../../math.zig");
@@ -73,7 +74,7 @@ const PipelineCollection = t: {
             .alignment = @alignOf(Pipeline),
         };
     }
-    break :t std.meta.Type(.{ .@"struct" = .{
+    break :t reify.Type(.{ .@"struct" = .{
         .layout = .auto,
         .fields = &fields,
         .decls = &.{},

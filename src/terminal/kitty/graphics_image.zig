@@ -402,10 +402,7 @@ pub const LoadingImage = struct {
         }
 
         // Set our time
-        self.image.transmit_time = std.time.Instant.now() catch |err| {
-            log.warn("failed to get time: {}", .{err});
-            return error.InternalError;
-        };
+        self.image.transmit_time = std.Io.Clock.awake.now(std.Io.Threaded.global_single_threaded.io());
 
         // Everything looks good, copy the image data over.
         var result = self.image;
@@ -512,7 +509,7 @@ pub const Image = struct {
     format: command.Transmission.Format = .rgb,
     compression: command.Transmission.Compression = .none,
     data: []const u8 = "",
-    transmit_time: std.time.Instant = undefined,
+    transmit_time: std.Io.Timestamp = .zero,
 
     /// Set this to true if this image was loaded by a command that
     /// doesn't specify an ID or number, since such commands should

@@ -74,33 +74,27 @@ fn writeDataItemsStr(comptime D: type, data_items: []const D) !void {
     if (@typeInfo(D).@"struct".layout == .@"packed") {
         const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
 
-        try formatAll("@bitCast([_]{s}){{", .{@typeName(IntEquivalent)});
+        try formatAll("@bitCast([{d}]{s}{{", .{ data_items.len, @typeName(IntEquivalent) });
 
         for (data_items) |item| {
             try formatAll("{d},", .{@as(IntEquivalent, @bitCast(item))});
         }
 
-        try formatAll(
-            \\}};
+        try writeAll(
+            \\});
             \\
-            ++ ".{}"
-        ,
-        .{});
+        );
     } else {
-        try formatAll(
-            \\.{{
+        try writeAll(
+            \\.{
             \\
-            ++ ".{}"
-        ,
-        .{});
+        );
 
         for (data_items) |item| {
-            try formatAll(
-                \\.{{
+            try writeAll(
+                \\.{
                 \\
-                ++ ".{}"
-            ,
-            .{});
+            );
 
             inline for (@typeInfo(D).@"struct".fields) |field| {
                 try formatAll("    .{s} = ", .{field.name});
@@ -110,20 +104,16 @@ fn writeDataItemsStr(comptime D: type, data_items: []const D) !void {
                 try formatAll(",\n", .{});
             }
 
-            try formatAll(
-                \\}},
+            try writeAll(
+                \\},
                 \\
-                ++ ".{}"
-            ,
-            .{});
+            );
         }
 
-        try formatAll(
-            \\}};
+        try writeAll(
+            \\};
             \\
-            ++ ".{}"
-        ,
-        .{});
+        );
     }
 }
 

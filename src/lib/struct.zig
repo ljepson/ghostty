@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("reify.zig");
 const testing = std.testing;
 const Target = @import("target.zig").Target;
 
@@ -27,11 +28,11 @@ pub fn Struct(
                     .type = field.type,
                     .default_value_ptr = field.default_value_ptr,
                     .is_comptime = field.is_comptime,
-                    .alignment = if (field.alignment > 0) field.alignment else @alignOf(field.type),
+                    .alignment = field.alignment orelse @alignOf(field.type),
                 };
             }
 
-            break :c std.meta.Type(.{ .@"struct" = .{
+            break :c reify.Type(.{ .@"struct" = .{
                 .layout = .@"extern",
                 .fields = &fields,
                 .decls = &.{},

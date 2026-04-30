@@ -3,6 +3,7 @@
 const Binding = @This();
 
 const std = @import("std");
+const reify = @import("../lib/reify.zig");
 const Allocator = std.mem.Allocator;
 const assert = @import("../quirks.zig").inlineAssert;
 const build_config = @import("../build_config.zig");
@@ -1416,9 +1417,9 @@ pub const Action = union(enum) {
         }
 
         // Build our union
-        return std.meta.Type(.{ .@"union" = .{
+        return reify.Type(.{ .@"union" = .{
             .layout = .auto,
-            .tag_type = std.meta.Type(.{ .@"enum" = .{
+            .tag_type = reify.Type(.{ .@"enum" = .{
                 .tag_type = std.math.IntFittingRange(0, i),
                 .fields = enum_fields[0..i],
                 .decls = &.{},

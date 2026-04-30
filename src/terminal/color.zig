@@ -2,6 +2,7 @@ const colorpkg = @This();
 
 const std = @import("std");
 const assert = @import("../quirks.zig").inlineAssert;
+const lib = @import("lib.zig");
 const x11_color = @import("x11_color.zig");
 
 /// The default palette.
@@ -388,7 +389,7 @@ pub const Dynamic = enum(u5) {
     /// "Each successive parameter changes the next color in the list.  The
     /// value of Ps tells the starting point in the list."
     pub fn next(self: Dynamic) ?Dynamic {
-        return std.meta.intToEnum(
+        return lib.intToEnum(
             Dynamic,
             @intFromEnum(self) + 1,
         ) catch null;

@@ -1,4 +1,5 @@
 const std = @import("std");
+const reify = @import("../lib/reify.zig");
 const build_config = @import("../build_config.zig");
 const assert = @import("../quirks.zig").inlineAssert;
 const apprt = @import("../apprt.zig");
@@ -436,7 +437,7 @@ pub const Action = union(Key) {
             };
         }
 
-        break :cvalue std.meta.Type(.{ .@"union" = .{
+        break :cvalue reify.Type(.{ .@"union" = .{
             .layout = .@"extern",
             .tag_type = null,
             .fields = &union_fields,

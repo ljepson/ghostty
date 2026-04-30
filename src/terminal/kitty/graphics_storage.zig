@@ -207,7 +207,7 @@ pub const ImageStorage = struct {
         while (it.next()) |kv| {
             if (kv.value_ptr.number == image_number) {
                 if (newest == null or
-                    kv.value_ptr.transmit_time.order(newest.?.transmit_time) == .gt)
+                    kv.value_ptr.transmit_time.nanoseconds > newest.?.transmit_time.nanoseconds)
                 {
                     newest = kv.value_ptr.*;
                 }
