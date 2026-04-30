@@ -109,8 +109,9 @@ fn buildLib(b: *std.Build, module: *std.Build.Module, options: anytype) !*std.Bu
     // The MSVC SDK include directories (added via linkLibC) contain
     // both C and C++ headers, so linkLibCpp is not needed.
     if (target.result.abi != .msvc) {
-        
+        lib.root_module.linkSystemLibrary("c++", .{});
     }
+    lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
 
     if (target.result.os.tag.isDarwin()) {
         try apple_sdk.addPaths(b, lib);

@@ -36,13 +36,13 @@ const required_blueprint_version = std.SemanticVersion{
     .patch = 0,
 };
 
-pub fn main() !void {
-    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = debug_allocator.deinit();
-    const alloc = debug_allocator.allocator();
+pub fn main(init: std.process.Init) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
 
     // Get our args
-    var it = try std.process.argsWithAllocator(alloc);
+    var it = try init.minimal.args.iterateAllocator(alloc);
     defer it.deinit();
     _ = it.next(); // Skip argv0
     const arg_major = it.next() orelse return error.NoMajorVersion;

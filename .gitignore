@@ -10,6 +10,9 @@
 zig-cache/
 .zig-cache/
 zig-out/
+zig-pkg/*
+!zig-pkg/uucode-0.2.0-ZZjBPqZVVABQepOqZHR7vV_NcaN-wats0IB6o-Exj6m9/
+!zig-pkg/uucode-0.2.0-ZZjBPqZVVABQepOqZHR7vV_NcaN-wats0IB6o-Exj6m9/**
 build-cmake/
 CMakeCache.txt
 CMakeFiles/
@@ -31,4 +34,3 @@ vgcore.*
 
 # Beads
 .beads/
-

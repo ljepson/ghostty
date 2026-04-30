@@ -15,8 +15,7 @@ const Allocator = std.mem.Allocator;
 pub fn main() !void {
     // This is a one-off patcher, so we leak all our memory on purpose
     // and let the OS clean it up when we exit.
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
-    const alloc = gpa.allocator();
+    const alloc = std.heap.pageAllocator;
 
     // Parse args: program input output
     const args = try std.process.argsAlloc(alloc);

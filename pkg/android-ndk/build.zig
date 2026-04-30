@@ -118,41 +118,23 @@ pub fn addPaths(b: *std.Build, step: *std.Build.Step.Compile) !void {
 
 fn findNDKPath(b: *std.Build) ?[]const u8 {
     // Check if user has set the environment variable for the NDK path.
-    // TODO: Fix environment variable access for Zig 0.16.0
-    if (false) {
-        return null;
+    if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk| {
+        if (ndk.len > 0) return ndk;
     }
 
     // Check the common environment variables for the Android SDK path and look for the NDK inside it.
     inline for (.{ "ANDROID_HOME", "ANDROID_SDK_ROOT" }) |env| {
-        if (comptime builtin.os.tag == .windows) {
-            if (std.process.getEnvVarOwned(b.allocator, env) catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => null,
-                else => |e| return e,
-            }) |sdk| {
-                defer b.allocator.free(sdk);
-                if (sdk.len > 0) {
-                    if (findLatestNDK(b, sdk)) |ndk| return ndk;
-                }
-            }
-        } else {
-            if (std.c.getenv(env)) |sdk| {
-                if (std.mem.len(sdk) > 0) {
-                    if (findLatestNDK(b, std.mem.span(sdk))) |ndk| return ndk;
-                }
+        if (b.graph.environ_map.get(env)) |sdk| {
+            if (sdk.len > 0) {
+                if (findLatestNDK(b, sdk)) |ndk| return ndk;
             }
         }
     }
 
     // As a fallback, we assume the most common/default SDK path based on the OS.
-    const home = if (comptime builtin.os.tag == .windows) {
-        std.process.getEnvVarOwned(
-            b.allocator,
-            "LOCALAPPDATA",
-        ) catch return null;
-    } else blk: {
-        const home_c = std.c.getenv("HOME") orelse return null;
-        break :blk b.allocator.dupe(u8, std.mem.span(home_c)) catch return null;
+    const home = switch (builtin.os.tag) {
+        .windows => b.graph.environ_map.get("LOCALAPPDATA") orelse return null,
+        else => b.graph.environ_map.get("HOME") orelse return null,
     };
 
     const default_sdk_path = b.pathJoin(

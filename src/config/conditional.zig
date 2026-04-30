@@ -37,23 +37,9 @@ pub const State = struct {
 };
 
 /// An enum of the available conditional configuration keys.
-pub const Key = blk: {
-    const stateInfo = @typeInfo(State).@"struct";
-    const fields: [stateInfo.fields.len]std.builtin.Type.EnumField = init: {
-        var result: [stateInfo.fields.len]std.builtin.Type.EnumField = undefined;
-        for (stateInfo.fields, 0..) |field, i| result[i] = .{
-            .name = field.name,
-            .value = i,
-        };
-        break :init result;
-    };
-
-    break :blk std.builtin.Type{ .@"enum" = .{
-        .tag_type = std.math.IntFittingRange(0, fields.len - 1),
-        .fields = &fields,
-        .decls = &.{},
-        .is_exhaustive = true,
-    } };
+pub const Key = enum {
+    theme,
+    os,
 };
 
 /// A single conditional that can be true or false.

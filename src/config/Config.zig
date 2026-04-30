@@ -3814,7 +3814,7 @@ _conditional_set: std.EnumSet(conditional.Key) = std.EnumSet(conditional.Key).in
 /// The steps we can use to reload the configuration after it has been loaded
 /// without reopening the files. This is used in very specific cases such
 /// as loadTheme which has more details on why.
-_replay_steps: std.ArrayListUnmanaged(Replay.Step) = .{},
+_replay_steps: std.ArrayListUnmanaged(Replay.Step) = .{ .items = &.{}, .capacity = 0 },
 
 /// Set to true if Ghostty was executed as xdg-terminal-exec on Linux.
 @"_xdg-terminal-exec": bool = false,

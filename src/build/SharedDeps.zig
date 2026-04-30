@@ -22,20 +22,20 @@ fn detectXcodeSDKPath(allocator: std.mem.Allocator) ![]const u8 {
         return sdk_path;
     };
     defer allocator.free(result.stdout);
-    
+
     // Trim whitespace from the output
     const xcode_path = std.mem.trim(u8, result.stdout, "\n\r ");
-    
+
     // Construct the SDK path
     const sdk_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk", .{xcode_path});
-    
+
     // Verify the SDK path exists
     var dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, sdk_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             // SDK not found, try to find available SDKs
             const platforms_path = try std.fmt.allocPrint(allocator, "{s}/Platforms/MacOSX.platform/Developer/SDKs", .{xcode_path});
             defer allocator.free(platforms_path);
-            
+
             var platforms_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, platforms_path, .{}) catch {
                 // If platforms directory doesn't exist, fall back to default
                 allocator.free(sdk_path);
@@ -44,7 +44,7 @@ fn detectXcodeSDKPath(allocator: std.mem.Allocator) ![]const u8 {
                 return fallback_sdk_path;
             };
             defer platforms_dir.close(std.Io.failing);
-            
+
             // Look for the first available SDK
             var iterator = platforms_dir.iterate();
             while (try iterator.next(std.Io.failing)) |entry| {
@@ -54,7 +54,7 @@ fn detectXcodeSDKPath(allocator: std.mem.Allocator) ![]const u8 {
                     return found_sdk_path;
                 }
             }
-            
+
             // No SDK found, fall back to default
             allocator.free(sdk_path);
             const default_path = "/Applications/Xcode.app/Contents/Developer";
@@ -64,7 +64,7 @@ fn detectXcodeSDKPath(allocator: std.mem.Allocator) ![]const u8 {
         else => return err,
     };
     dir.close(std.Io.failing);
-    
+
     return sdk_path;
 }
 
@@ -209,26 +209,26 @@ pub fn add(
                     std.log.warn("Failed to detect Xcode SDK path, using fallback: {}", .{err});
                     break :blk std.zig.LibCInstallation{
                         .include_dir = "/usr/include",
-                        .sys_include_dir = "/usr/include", 
+                        .sys_include_dir = "/usr/include",
                         .crt_dir = "/usr/lib",
                         .msvc_lib_dir = "",
                         .kernel32_lib_dir = "",
                         .gcc_dir = "",
                     };
                 };
-                
+
                 const custom_libc = b.allocator.create(std.zig.LibCInstallation) catch |err| {
                     std.log.warn("Failed to allocate LibCInstallation: {}", .{err});
                     break :blk std.zig.LibCInstallation{
                         .include_dir = "/usr/include",
                         .sys_include_dir = "/usr/include",
-                        .crt_dir = "/usr/lib", 
+                        .crt_dir = "/usr/lib",
                         .msvc_lib_dir = "",
                         .kernel32_lib_dir = "",
                         .gcc_dir = "",
                     };
                 };
-                
+
                 const include_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch {
                     std.log.warn("Failed to allocate include_dir path, using fallback", .{});
                     const fallback = "/usr/include";
@@ -265,7 +265,7 @@ pub fn add(
                         .gcc_dir = "",
                     };
                 };
-                
+
                 custom_libc.* = .{
                     .include_dir = include_dir,
                     .sys_include_dir = sys_include_dir,
@@ -309,7 +309,7 @@ pub fn add(
                                 .gcc_dir = "",
                             };
                         };
-                        
+
                         const custom_libc = b.allocator.create(std.zig.LibCInstallation) catch |err| {
                             std.log.warn("Failed to allocate LibCInstallation for PTY: {}", .{err});
                             break :blk std.zig.LibCInstallation{
@@ -321,52 +321,52 @@ pub fn add(
                                 .gcc_dir = "",
                             };
                         };
-                        
+
                         const pty_include_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch {
-                                std.log.warn("Failed to allocate PTY include_dir path, using fallback", .{});
-                                const fallback = "/usr/include";
-                                break :blk std.zig.LibCInstallation{
-                                    .include_dir = fallback,
-                                    .sys_include_dir = fallback,
-                                    .crt_dir = "/usr/lib",
-                                    .msvc_lib_dir = "",
-                                    .kernel32_lib_dir = "",
-                                    .gcc_dir = "",
-                                };
-                            };
-                            const pty_sys_include_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch {
-                                std.log.warn("Failed to allocate PTY sys_include_dir path, using fallback", .{});
-                                const fallback = "/usr/include";
-                                break :blk std.zig.LibCInstallation{
-                                    .include_dir = fallback,
-                                    .sys_include_dir = fallback,
-                                    .crt_dir = "/usr/lib",
-                                    .msvc_lib_dir = "",
-                                    .kernel32_lib_dir = "",
-                                    .gcc_dir = "",
-                                };
-                            };
-                            const pty_crt_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/lib", .{sdk_path}) catch {
-                                std.log.warn("Failed to allocate PTY crt_dir path, using fallback", .{});
-                                const fallback = "/usr/include";
-                                break :blk std.zig.LibCInstallation{
-                                    .include_dir = fallback,
-                                    .sys_include_dir = fallback,
-                                    .crt_dir = "/usr/lib",
-                                    .msvc_lib_dir = "",
-                                    .kernel32_lib_dir = "",
-                                    .gcc_dir = "",
-                                };
-                            };
-                            
-                            custom_libc.* = .{
-                                .include_dir = pty_include_dir,
-                                .sys_include_dir = pty_sys_include_dir,
-                                .crt_dir = pty_crt_dir,
+                            std.log.warn("Failed to allocate PTY include_dir path, using fallback", .{});
+                            const fallback = "/usr/include";
+                            break :blk std.zig.LibCInstallation{
+                                .include_dir = fallback,
+                                .sys_include_dir = fallback,
+                                .crt_dir = "/usr/lib",
                                 .msvc_lib_dir = "",
                                 .kernel32_lib_dir = "",
                                 .gcc_dir = "",
                             };
+                        };
+                        const pty_sys_include_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/include", .{sdk_path}) catch {
+                            std.log.warn("Failed to allocate PTY sys_include_dir path, using fallback", .{});
+                            const fallback = "/usr/include";
+                            break :blk std.zig.LibCInstallation{
+                                .include_dir = fallback,
+                                .sys_include_dir = fallback,
+                                .crt_dir = "/usr/lib",
+                                .msvc_lib_dir = "",
+                                .kernel32_lib_dir = "",
+                                .gcc_dir = "",
+                            };
+                        };
+                        const pty_crt_dir = std.fmt.allocPrint(b.allocator, "{s}/usr/lib", .{sdk_path}) catch {
+                            std.log.warn("Failed to allocate PTY crt_dir path, using fallback", .{});
+                            const fallback = "/usr/include";
+                            break :blk std.zig.LibCInstallation{
+                                .include_dir = fallback,
+                                .sys_include_dir = fallback,
+                                .crt_dir = "/usr/lib",
+                                .msvc_lib_dir = "",
+                                .kernel32_lib_dir = "",
+                                .gcc_dir = "",
+                            };
+                        };
+
+                        custom_libc.* = .{
+                            .include_dir = pty_include_dir,
+                            .sys_include_dir = pty_sys_include_dir,
+                            .crt_dir = pty_crt_dir,
+                            .msvc_lib_dir = "",
+                            .kernel32_lib_dir = "",
+                            .gcc_dir = "",
+                        };
                         break :blk custom_libc.*;
                     };
                     c.addSystemIncludePath(.{ .cwd_relative = libc.sys_include_dir.? });
@@ -608,12 +608,14 @@ pub fn add(
     }
 
     // C files
-    
+
     step.root_module.addIncludePath(b.path("src/stb"));
     // Disable ubsan for MSVC: Zig's ubsan runtime cannot be bundled
     // on Windows (LNK4229), leaving __ubsan_handle_* unresolved when
     // the static archive is consumed by an external linker.
-    step.root_module.addCSourceFile(.{ .file = b.path("src/stb/stb.c"), .flags = if (step.rootModuleTarget().abi == .msvc)
+    step.root_module.addCSourceFile(.{
+        .file = b.path("src/stb/stb.c"),
+        .flags = if (step.rootModuleTarget().abi == .msvc)
             &.{ "-fno-sanitize=undefined", "-fno-sanitize-trap=undefined" }
         else
             &.{},
@@ -926,17 +928,17 @@ fn addGtkNg(
             // IMPORTANT: gtk4-layer-shell must be linked BEFORE
             // wayland-client, as it relies on shimming libwayland's APIs.
             if (b.systemIntegrationOption("gtk4-layer-shell", .{})) {
-                step.linkSystemLibrary2("gtk4-layer-shell-0", dynamic_link_opts);
+                step.root_module.linkSystemLibrary("gtk4-layer-shell-0", dynamic_link_opts);
             } else {
                 // gtk4-layer-shell *must* be dynamically linked,
                 // so we don't add it as a static library
                 const shared_lib = gtk4_layer_shell.artifact("gtk4-layer-shell");
                 b.installArtifact(shared_lib);
-                step.linkLibrary(shared_lib);
+                step.root_module.linkLibrary(shared_lib);
             }
         }
 
-        step.linkSystemLibrary2("wayland-client", dynamic_link_opts);
+        step.root_module.linkSystemLibrary("wayland-client", dynamic_link_opts);
     }
 
     {

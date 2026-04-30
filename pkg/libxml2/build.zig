@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) !void {
         lib.root_module.linkSystemLibrary("ws2_32", .{});
     } else {
         lib.root_module.addIncludePath(b.path("override/config/posix"));
+        lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
     }
 
     var flags: std.ArrayList([]const u8) = .empty;

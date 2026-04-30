@@ -57,7 +57,7 @@ fn buildGlslang(
     // The MSVC SDK include directories (added via linkLibC) contain
     // both C and C++ headers, so linkLibCpp is not needed.
     if (target.result.abi != .msvc) {
-        
+        lib.root_module.linkSystemLibrary("c++", .{});
     }
     if (upstream_) |upstream| lib.root_module.addIncludePath(upstream.path(""));
     lib.root_module.addIncludePath(b.path("override"));

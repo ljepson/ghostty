@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) !void {
 
     // Our highway package is free of libc at runtime (uses no symbols)
     // but does require libc headers at compile time.
+    lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
     
 
     lib.root_module.addIncludePath(b.path("src/cpp"));

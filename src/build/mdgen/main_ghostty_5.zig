@@ -2,8 +2,9 @@ const std = @import("std");
 const gen = @import("mdgen.zig");
 
 pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
-    const alloc = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.pageAllocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
 
     var buffer: [1024]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&buffer);

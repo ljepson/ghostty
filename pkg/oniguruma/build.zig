@@ -74,9 +74,9 @@ fn buildLib(b: *std.Build, module: *std.Build.Module, options: anytype) !*std.Bu
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
-        // Link system libraries for cross-compilation in Zig 0.16.0
-        lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
     }
+    // Link libc so C headers like stdlib.h are available
+    lib.root_module.linkSystemLibrary("c", .{ .use_pkg_config = .no });
 
     if (b.lazyDependency("oniguruma", .{})) |upstream| {
         lib.root_module.addIncludePath(upstream.path("src"));
