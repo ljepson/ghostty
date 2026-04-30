@@ -666,7 +666,20 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
         }
     }
 
-    return @Struct(.auto, null, decl_fields[0..i], &[_]std.builtin.Type.Declaration{}, .{ .is_tuple = false });
+    comptime var field_names_val: [i][]const u8 = undefined;
+    comptime var field_types_val: [i]type = undefined;
+    comptime var field_attrs_val: [i]std.builtin.Type.StructField.Attributes = undefined;
+    for (decl_fields[0..i], 0..) |f, idx| {
+        field_names_val[idx] = f.name;
+        field_types_val[idx] = f.type;
+        field_attrs_val[idx] = .{
+            .default_value_ptr = f.default_value_ptr,
+            .@"comptime" = f.is_comptime,
+            .@"align" = f.alignment,
+        };
+    }
+
+    return @Struct(.auto, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
 pub fn Slice(

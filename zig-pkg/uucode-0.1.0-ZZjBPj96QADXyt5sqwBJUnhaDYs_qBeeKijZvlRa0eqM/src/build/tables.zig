@@ -215,7 +215,6 @@ pub fn main(minimal: std.process.Init.Minimal) !void {
             i,
             arena_alloc,
             ucd,
-            writeAll,
         );
 
         std.log.debug("Arena end capacity: {d}", .{arena.queryCapacity()});
@@ -422,7 +421,18 @@ fn TableAllData(comptime c: config.Table) type {
             }
         }
 
-        const F = types.Field(cf, c.packing);
+        const resolved_packing: config.Table.Packing = switch (c.packing) {
+            .auto, .@"packed" => blk: {
+                inline for (c.fields) |f| {
+                    if (!f.canBePacked()) {
+                        break :blk .unpacked;
+                    }
+                }
+                break :blk .@"packed";
+            },
+            .unpacked => .unpacked,
+        };
+        const F = types.Field(cf, resolved_packing);
         fields[i] = .{
             .name = cf.name,
             .type = F,
@@ -578,7 +588,6 @@ pub fn writeTableData(
     table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
-    comptime write: *const fn (bytes: []const u8) anyerror!void,
 ) !void {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
@@ -1161,16 +1170,28 @@ pub fn writeTableData(
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
+    const resolved_packing: config.Table.Packing = switch (table_config.packing) {
+        .auto, .@"packed" => blk: {
+            inline for (table_config.fields) |f| {
+                if (!f.canBePacked()) {
+                    break :blk .unpacked;
+                }
+            }
+            break :blk .@"packed";
+        },
+        .unpacked => .unpacked,
+    };
+
     try formatAll(
         \\const {s}_config = config.Table{{
         \\
     , .{prefix});
 
     try writeAll("    .packing = ");
-    try writeAll(switch (table_config.packing) {
-        .auto => unreachable,
+    try writeAll(switch (resolved_packing) {
         .unpacked => ".unpacked",
         .@"packed" => ".@\"packed\"",
+        .auto => unreachable,
     });
 
     try writeAll(

@@ -887,29 +887,36 @@ pub fn Field(comptime c: config.Field, comptime packing: config.Table.Packing) t
 }
 
 pub fn Data(comptime c: config.Table) type {
-    var data_fields: [c.fields.len]std.builtin.Type.StructField = undefined;
+    const resolved_packing: config.Table.Packing = switch (c.packing) {
+        .auto, .@"packed" => blk: {
+            inline for (c.fields) |f| {
+                if (!f.canBePacked()) {
+                    break :blk .unpacked;
+                }
+            }
+            break :blk .@"packed";
+        },
+        .unpacked => .unpacked,
+    };
+
+    const layout = if (resolved_packing == .@"packed") .@"packed" else .auto;
+
+    comptime var field_names_val: [c.fields.len][]const u8 = undefined;
+    comptime var field_types_val: [c.fields.len]type = undefined;
+    comptime var field_attrs_val: [c.fields.len]std.builtin.Type.StructField.Attributes = undefined;
 
     for (c.fields, 0..) |cf, i| {
-        const F = Field(cf, c.packing);
-
-        data_fields[i] = .{
-            .name = cf.name,
-            .type = F,
+        const F = Field(cf, resolved_packing);
+        field_names_val[i] = cf.name;
+        field_types_val[i] = F;
+        field_attrs_val[i] = .{
             .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = if (c.packing == .@"packed") 0 else @alignOf(F),
+            .@"comptime" = false,
+            .@"align" = if (resolved_packing == .@"packed") null else @alignOf(F),
         };
     }
 
-    return std.meta.Type(.{
-        .@"struct" = .{
-            .layout = if (c.packing == .@"packed") .@"packed" else .auto,
-            .backing_integer = null,
-            .fields = &data_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(layout, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
 pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []const D) !void {
@@ -1036,7 +1043,7 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
             decl_fields[i] = .{
                 .name = f.name,
                 .type = T,
-                .default_value_ptr = null, // TODO: can we set this?
+                .default_value_ptr = null,
                 .is_comptime = false,
                 .alignment = @alignOf(T),
             };
@@ -1044,14 +1051,20 @@ pub fn StructFromDecls(comptime Struct: type, comptime decl: []const u8) type {
         }
     }
 
-    return std.meta.Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = decl_fields[0..i],
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    comptime var field_names_val: [i][]const u8 = undefined;
+    comptime var field_types_val: [i]type = undefined;
+    comptime var field_attrs_val: [i]std.builtin.Type.StructField.Attributes = undefined;
+    for (decl_fields[0..i], 0..) |f, idx| {
+        field_names_val[idx] = f.name;
+        field_types_val[idx] = f.type;
+        field_attrs_val[idx] = .{
+            .default_value_ptr = f.default_value_ptr,
+            .@"comptime" = f.is_comptime,
+            .@"align" = f.alignment,
+        };
+    }
+
+    return @Struct(.auto, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
 pub fn Slice(

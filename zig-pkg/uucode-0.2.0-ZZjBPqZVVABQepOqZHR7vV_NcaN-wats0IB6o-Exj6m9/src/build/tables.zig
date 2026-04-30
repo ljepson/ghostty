@@ -66,20 +66,14 @@ pub fn main(minimal: std.process.Init.Minimal) !void {
     defer table_arena.deinit();
     const table_allocator = table_arena.allocator();
 
-    comptime var resolved_tables: [table_configs.len]config.Table = undefined;
     inline for (table_configs, 0..) |table_config, i| {
-        resolved_tables[i] = table_config.resolve();
-    }
-
-    inline for (resolved_tables, 0..) |_, i| {
         // timing code removed for Zig 0.16.0 compatibility
 
         try writeTableData(
-            table_configs[i],
+            table_config,
             i,
             table_allocator,
             &ucd,
-            writeAll,
         );
 
         std.log.debug("Arena end capacity: {d}", .{table_arena.queryCapacity()});
@@ -94,12 +88,11 @@ pub fn main(minimal: std.process.Init.Minimal) !void {
         \\
     );
 
-    inline for (resolved_tables, 0..) |resolved_table, i| {
+    inline for (table_configs, 0..) |table_config, i| {
         try writeTable(
-            resolved_table,
+            table_config,
             i,
             table_allocator,
-            writeAll,
         );
     }
 
@@ -296,7 +289,20 @@ fn TableAllData(comptime c: config.Table) type {
             }
         }
 
-        const F = types.Field(cf, c.packing);
+        // Resolve .auto packing to a concrete value before calling types.Field()
+        // since Field() doesn't handle .auto (it's a table-level hint only).
+        const resolved_packing: config.Table.Packing = switch (c.packing) {
+            .auto, .@"packed" => blk: {
+                inline for (c.fields) |f| {
+                    if (!f.canBePacked()) {
+                        break :blk .unpacked;
+                    }
+                }
+                break :blk .@"packed";
+            },
+            .unpacked => .unpacked,
+        };
+        const F = types.Field(cf, resolved_packing);
         fields[i] = .{
             .name = cf.name,
             .type = F,
@@ -363,7 +369,20 @@ fn TableAllData(comptime c: config.Table) type {
         }
     }
 
-    return @Struct(.auto, null, @as([]const []const u8, &.{}), @as(*const [all_fields.len]type, undefined), @as(*const [all_fields.len]std.builtin.Type.StructField.Attributes, undefined));
+    comptime var field_names_val: [all_fields.len][]const u8 = undefined;
+    comptime var field_types_val: [all_fields.len]type = undefined;
+    comptime var field_attrs_val: [all_fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    for (all_fields, 0..) |f, idx| {
+        field_names_val[idx] = f.name;
+        field_types_val[idx] = f.type;
+        field_attrs_val[idx] = .{
+            .default_value_ptr = f.default_value_ptr,
+            .@"comptime" = f.is_comptime,
+            .@"align" = f.alignment,
+        };
+    }
+
+    return @Struct(.auto, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
 fn TableTracking(comptime Struct: type) type {
@@ -403,7 +422,20 @@ fn TableTracking(comptime Struct: type) type {
         }
     }
 
-    return @Struct(.auto, null, @as([]const []const u8, &.{}), @as(*const [tracking_fields[0..i].len]type, undefined), @as(*const [tracking_fields[0..i].len]std.builtin.Type.StructField.Attributes, undefined));
+    comptime var tracking_names: [i][]const u8 = undefined;
+    comptime var tracking_types: [i]type = undefined;
+    comptime var tracking_attrs: [i]std.builtin.Type.StructField.Attributes = undefined;
+    for (tracking_fields[0..i], 0..) |f, idx| {
+        tracking_names[idx] = f.name;
+        tracking_types[idx] = f.type;
+        tracking_attrs[idx] = .{
+            .default_value_ptr = null,
+            .@"comptime" = false,
+            .@"align" = @alignOf(f.type),
+        };
+    }
+
+    return @Struct(.auto, null, &tracking_names, &tracking_types, &tracking_attrs);
 }
 
 fn maybePackedInit(
@@ -442,12 +474,72 @@ fn tablePrefix(
     return .{ prefix, TypePrefix };
 }
 
+fn writeRuntimeConfig(r: config.Field.Runtime) !void {
+    try formatAll(
+        \\.{{
+        \\    .name = "{s}",
+        \\
+    , .{r.name});
+
+    const has_dot = std.mem.indexOfScalar(u8, r.type, '.');
+    if (has_dot == null) {
+        try formatAll(
+            \\    .type = {s},
+            \\
+        , .{r.type});
+    } else {
+        const dot_pos = has_dot.?;
+        const base = r.type[0..dot_pos];
+        const rest = r.type[dot_pos + 1..];
+        if (std.mem.endsWith(u8, base, "types") or std.mem.endsWith(u8, base, "types_x")) {
+            try formatAll(
+                \\    .type = {s},
+                \\
+            , .{r.type});
+        } else {
+            const prefix: []const u8 = if (base.len > 0 and base[0] == '?') "?" else "";
+            try formatAll(
+                \\    .type = {s}build_config.{s},
+                \\
+            , .{ prefix, rest });
+        }
+    }
+
+    if (r.cp_packing != .direct or
+        r.shift_low != 0 or
+        r.shift_high != 0)
+    {
+        try formatAll(
+            \\    .cp_packing = .{s},
+            \\    .shift_low = {},
+            \\    .shift_high = {},
+            \\
+        , .{ @tagName(r.cp_packing), r.shift_low, r.shift_high });
+    }
+    if (r.max_len != 0) {
+        try formatAll(
+            \\    .max_len = {},
+            \\    .max_offset = {},
+            \\    .embedded_len = {},
+            \\
+        , .{ r.max_len, r.max_offset, r.embedded_len });
+    }
+    if (r.min_value != 0 or r.max_value != 0) {
+        try formatAll(
+            \\    .min_value = {},
+            \\    .max_value = {},
+            \\
+        , .{ r.min_value, r.max_value });
+    }
+
+    try formatAll("}},\n", .{});
+}
+
 pub fn writeTableData(
     comptime table_config: config.Table,
     table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
-    writer: *std.Io.Writer,
 ) !void {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
@@ -1121,7 +1213,11 @@ pub fn writeTableData(
     , .{prefix});
 
     try writeAll("    .packing = ");
-    try table_config.packing.write(writer);
+    try writeAll(switch (table_config.packing) {
+        .auto => unreachable,
+        .unpacked => ".unpacked",
+        .@"packed" => ".@\"packed\"",
+    });
 
     try writeAll(
         \\,
@@ -1158,7 +1254,7 @@ pub fn writeTableData(
             }
         }
 
-        try r.write(writer);
+        try writeRuntimeConfig(r);
     }
 
     if (!all_fields_okay) {
@@ -1302,9 +1398,7 @@ fn writeTable(
     comptime table_config: config.Table,
     table_index: usize,
     allocator: std.mem.Allocator,
-    w: *std.Io.Writer,
 ) !void {
-    _ = w;
     if (table_config.name) |name| {
         try formatAll("    .{s} = ", .{name});
     } else {
