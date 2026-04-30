@@ -12,7 +12,7 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-var output_fd: std.posix.fd_t = undefined;
+pub var output_fd: std.posix.fd_t = undefined;
 
 fn writeAll(bytes: []const u8) !void {
     var offset: usize = 0;
@@ -1205,6 +1205,17 @@ pub fn writeTableData(
 
     // timing code removed for Zig 0.16.0 compatibility
 
+    // Resolve .auto packing to concrete before emitting
+    const resolved_packing: config.Table.Packing = switch (table_config.packing) {
+        .auto, .@"packed" => blk: {
+            inline for (table_config.fields) |f| {
+                if (!f.canBePacked()) break :blk .unpacked;
+            }
+            break :blk .@"packed";
+        },
+        .unpacked => .unpacked,
+    };
+
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
     try formatAll(
@@ -1213,10 +1224,10 @@ pub fn writeTableData(
     , .{prefix});
 
     try writeAll("    .packing = ");
-    try writeAll(switch (table_config.packing) {
-        .auto => unreachable,
+    try writeAll(switch (resolved_packing) {
         .unpacked => ".unpacked",
         .@"packed" => ".@\"packed\"",
+        .auto => unreachable,
     });
 
     try writeAll(
@@ -1386,7 +1397,7 @@ pub fn writeTableData(
         .{ prefix, num_stages, data_items.len, TypePrefix, TypePrefix },
     );
 
-    try types.writeDataItems(Data, writeAll, data_items);
+    try types.writeDataItems(Data, data_items);
 
     try writeAll(
         \\

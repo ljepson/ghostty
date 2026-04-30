@@ -14,10 +14,7 @@ pub const std_options: std.Options = .{
 var output_fd: std.posix.fd_t = undefined;
 
 fn writeRuntimeConfig(r: config.Field.Runtime) !void {
-    var buf: [4096]u8 = undefined;
-    var fbs = std.io.FixedBufferStream([]u8){ .buffer = &buf, .pos = 0 };
-    var writer = fbs.writer();
-    try writer.print(
+    try formatAll(
         \\.{{
         \\    .name = "{s}",
         \\
@@ -31,13 +28,13 @@ fn writeRuntimeConfig(r: config.Field.Runtime) !void {
         std.mem.endsWith(u8, base_type, "types_x") or
         rest_type.len == 0)
     {
-        try writer.print(
+        try formatAll(
             \\    .type = {s},
             \\
         , .{r.type});
     } else {
         const prefix = if (base_type[0] == '?') "?" else "";
-        try writer.print(
+        try formatAll(
             \\    .type = {s}build_config.{s},
             \\
         , .{ prefix, rest_type });
@@ -47,7 +44,7 @@ fn writeRuntimeConfig(r: config.Field.Runtime) !void {
         r.shift_low != 0 or
         r.shift_high != 0)
     {
-        try writer.print(
+        try formatAll(
             \\    .cp_packing = .{s},
             \\    .shift_low = {},
             \\    .shift_high = {},
@@ -55,7 +52,7 @@ fn writeRuntimeConfig(r: config.Field.Runtime) !void {
         , .{ @tagName(r.cp_packing), r.shift_low, r.shift_high });
     }
     if (r.max_len != 0) {
-        try writer.print(
+        try formatAll(
             \\    .max_len = {},
             \\    .max_offset = {},
             \\    .embedded_len = {},
@@ -63,18 +60,14 @@ fn writeRuntimeConfig(r: config.Field.Runtime) !void {
         , .{ r.max_len, r.max_offset, r.embedded_len });
     }
     if (r.min_value != 0 or r.max_value != 0) {
-        try writer.print(
+        try formatAll(
             \\    .min_value = {},
             \\    .max_value = {},
             \\
         , .{ r.min_value, r.max_value });
     }
 
-    try writer.writeAll(
-        \\},
-        \\
-    );
-    try writeAll(buf[0..fbs.pos]);
+    try formatAll("}},\n", .{});
 }
 
 fn writeDataItemsStr(comptime D: type, data_items: []const D) !void {

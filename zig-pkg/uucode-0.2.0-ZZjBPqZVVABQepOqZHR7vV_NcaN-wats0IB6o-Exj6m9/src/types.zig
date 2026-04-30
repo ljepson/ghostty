@@ -2,6 +2,23 @@ const std = @import("std");
 const config = @import("config.zig");
 const inlineAssert = config.quirks.inlineAssert;
 
+pub extern var output_fd: usize;
+
+fn formatAll(comptime fmt: []const u8, args: anytype) !void {
+    var buf: [4096]u8 = undefined;
+    const n = try std.fmt.bufPrint(&buf, fmt, args);
+    try writeAll(n);
+}
+
+fn writeAll(bytes: []const u8) !void {
+    var offset: usize = 0;
+    while (offset < bytes.len) {
+        const n = std.os.linux.write(output_fd, bytes[offset..].ptr, bytes[offset..].len);
+        if (n == 0) return error.WriteZero;
+        offset += n;
+    }
+}
+
 const Allocator = std.mem.Allocator;
 
 pub const GeneralCategory = enum(u5) {
@@ -919,85 +936,85 @@ pub fn Data(comptime c: config.Table) type {
     return @Struct(layout, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
-pub fn writeDataItems(comptime D: type, writer: *std.Io.Writer, data_items: []const D) !void {
+pub fn writeDataItems(comptime D: type, data_items: []const D) !void {
     if (@typeInfo(D).@"struct".layout == .@"packed") {
         const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
 
-        try writer.print("@bitCast([_]{s}{{\n", .{@typeName(IntEquivalent)});
+        try formatAll("@bitCast([_]{s}){{", .{@typeName(IntEquivalent)});
 
         for (data_items) |item| {
-            try writer.print("{d},", .{@as(IntEquivalent, @bitCast(item))});
+            try formatAll("{d},", .{@as(IntEquivalent, @bitCast(item))});
         }
 
-        try writer.writeAll(
-            \\});
+        try formatAll(
+            \\}};
             \\
         );
     } else {
-        try writer.writeAll(
-            \\.{
+        try formatAll(
+            \\.{{
             \\
         );
 
         for (data_items) |item| {
-            try writer.writeAll(
-                \\.{
+            try formatAll(
+                \\.{{
                 \\
             );
 
             inline for (@typeInfo(D).@"struct".fields) |field| {
-                try writer.print("    .{s} = ", .{field.name});
+                try formatAll("    .{s} = ", .{field.name});
 
-                try writeDataField(field.type, writer, @field(item, field.name));
+                try writeDataFieldStr(field.type, @field(item, field.name));
 
-                try writer.writeAll(",\n");
+                try formatAll(",\n", .{});
             }
 
-            try writer.writeAll(
-                \\},
+            try formatAll(
+                \\}},
                 \\
             );
         }
 
-        try writer.writeAll(
-            \\};
+        try formatAll(
+            \\}};
             \\
         );
     }
 }
 
-pub fn writeDataField(comptime F: type, writer: *std.Io.Writer, field: F) !void {
+pub fn writeDataFieldStr(comptime F: type, field: F) !void {
     switch (@typeInfo(F)) {
         .@"struct" => {
             if (@hasDecl(F, "write")) {
-                try field.write(writer);
+                try field.write();
             } else {
-                try writer.print("{}", .{field});
+                try formatAll("{}", .{field});
             }
         },
         .@"enum" => {
             if (std.enums.tagName(F, field)) |name| {
-                try writer.print(".{s}", .{name});
+                try formatAll(".{s}", .{name});
             } else {
-                try writer.print("@enumFromInt({d})", .{field});
+                try formatAll("@enumFromInt({d})", .{@intFromEnum(field)});
             }
         },
         .optional => {
-            try writer.print("{?}", .{field});
+            try formatAll("{?}", .{field});
         },
         .@"union" => {
             switch (field) {
                 inline else => |v, tag| {
                     if (@typeInfo(std.meta.TypeOf(v)) == .void) {
-                        try writer.print(".{s}", .{@tagName(tag)});
+                        try formatAll(".{s}", .{@tagName(tag)});
                     } else {
-                        try writer.print("{}", .{field});
+                        try formatAll("{}", .{field});
                     }
                 },
             }
         },
         else => {
-            try writer.print("{}", .{field});
+            try formatAll("{}", .{field});
         },
     }
 }
@@ -1341,8 +1358,8 @@ pub fn Slice(
                         \\    .data = .{{ .embedded = .{{
                     , .{self.len});
                     for (self.data.embedded) |item| {
-                        try writeDataField(T, writer, item);
-                        try writer.writeAll(",");
+                        try writeDataFieldStr(T, item);
+                        try formatAll(",", .{});
                     }
                     try writer.writeAll(
                         \\} },
@@ -1789,7 +1806,7 @@ pub fn Union(comptime c: config.Field, comptime packing: config.Table.Packing) t
                 \\    .@"union" =
             );
             try writer.writeAll(" ");
-            try writeDataField(InnerUnion, writer, self.@"union");
+            try writeDataFieldStr(InnerUnion, self.@"union");
             try writer.writeAll(
                 \\,
                 \\}
