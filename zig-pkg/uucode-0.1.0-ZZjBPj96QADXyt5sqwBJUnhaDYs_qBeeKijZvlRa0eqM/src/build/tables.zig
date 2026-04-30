@@ -83,18 +83,24 @@ fn writeDataItemsStr(comptime D: type, data_items: []const D) !void {
         try formatAll(
             \\}};
             \\
-        );
+            ++ ".{}"
+        ,
+        .{});
     } else {
         try formatAll(
             \\.{{
             \\
-        );
+            ++ ".{}"
+        ,
+        .{});
 
         for (data_items) |item| {
             try formatAll(
                 \\.{{
                 \\
-            );
+                ++ ".{}"
+            ,
+            .{});
 
             inline for (@typeInfo(D).@"struct".fields) |field| {
                 try formatAll("    .{s} = ", .{field.name});
@@ -107,13 +113,17 @@ fn writeDataItemsStr(comptime D: type, data_items: []const D) !void {
             try formatAll(
                 \\}},
                 \\
-            );
+                ++ ".{}"
+            ,
+            .{});
         }
 
         try formatAll(
             \\}};
             \\
-        );
+            ++ ".{}"
+        ,
+        .{});
     }
 }
 
