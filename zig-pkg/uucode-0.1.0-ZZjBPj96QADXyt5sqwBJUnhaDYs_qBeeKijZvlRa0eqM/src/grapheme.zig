@@ -377,7 +377,7 @@ fn testGraphemeBreak(getActual: fn (cp1: u21, cp2: u21, state: *BreakState) bool
     const allocator = std.testing.allocator;
     const file_path = "ucd/auxiliary/GraphemeBreakTest.txt";
 
-    const file = try std.Io.Dir.cwd().openFile(std.Io.Threaded.global_single_threaded.io(), file_path, .{});
+    const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
@@ -512,7 +512,7 @@ pub fn precomputedGraphemeBreak(
         computeGraphemeBreak,
     );
     // 5 BreakState fields x 2 x 18 GraphemeBreak fields = 1620
-    std.debug.assert(@sizeOf(std.meta.TypeOf(table)) == 1620);
+    std.debug.assert(@sizeOf(@TypeOf(table)) == 1620);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;

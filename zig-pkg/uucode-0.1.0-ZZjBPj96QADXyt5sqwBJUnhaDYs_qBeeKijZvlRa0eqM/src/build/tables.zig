@@ -11,10 +11,163 @@ pub const std_options: std.Options = .{
         .info,
 };
 
-pub fn main() !void {
-    var ts: std.c.timespec = .{ .sec = 0, .nsec = 0 };
-    _ = std.c.clock_gettime(std.c.CLOCK.REALTIME, &ts);
-    _ = ts.sec;
+var output_fd: std.posix.fd_t = undefined;
+
+fn writeRuntimeConfig(r: config.Field.Runtime) !void {
+    var buf: [4096]u8 = undefined;
+    var fbs = std.io.FixedBufferStream([]u8){ .buffer = &buf, .pos = 0 };
+    var writer = fbs.writer();
+    try writer.print(
+        \\.{{
+        \\    .name = "{s}",
+        \\
+    , .{r.name});
+
+    var type_parts = std.mem.splitScalar(u8, r.type, '.');
+    const base_type = type_parts.next().?;
+    const rest_type = type_parts.rest();
+
+    if (std.mem.endsWith(u8, base_type, "types") or
+        std.mem.endsWith(u8, base_type, "types_x") or
+        rest_type.len == 0)
+    {
+        try writer.print(
+            \\    .type = {s},
+            \\
+        , .{r.type});
+    } else {
+        const prefix = if (base_type[0] == '?') "?" else "";
+        try writer.print(
+            \\    .type = {s}build_config.{s},
+            \\
+        , .{ prefix, rest_type });
+    }
+
+    if (r.cp_packing != .direct or
+        r.shift_low != 0 or
+        r.shift_high != 0)
+    {
+        try writer.print(
+            \\    .cp_packing = .{s},
+            \\    .shift_low = {},
+            \\    .shift_high = {},
+            \\
+        , .{ @tagName(r.cp_packing), r.shift_low, r.shift_high });
+    }
+    if (r.max_len != 0) {
+        try writer.print(
+            \\    .max_len = {},
+            \\    .max_offset = {},
+            \\    .embedded_len = {},
+            \\
+        , .{ r.max_len, r.max_offset, r.embedded_len });
+    }
+    if (r.min_value != 0 or r.max_value != 0) {
+        try writer.print(
+            \\    .min_value = {},
+            \\    .max_value = {},
+            \\
+        , .{ r.min_value, r.max_value });
+    }
+
+    try writer.writeAll(
+        \\},
+        \\
+    );
+    try writeAll(buf[0..fbs.pos]);
+}
+
+fn writeDataItemsStr(comptime D: type, data_items: []const D) !void {
+    if (@typeInfo(D).@"struct".layout == .@"packed") {
+        const IntEquivalent = std.meta.Int(.unsigned, @bitSizeOf(D));
+
+        try formatAll("@bitCast([_]{s}){{", .{@typeName(IntEquivalent)});
+
+        for (data_items) |item| {
+            try formatAll("{d},", .{@as(IntEquivalent, @bitCast(item))});
+        }
+
+        try formatAll(
+            \\}};
+            \\
+        );
+    } else {
+        try formatAll(
+            \\.{{
+            \\
+        );
+
+        for (data_items) |item| {
+            try formatAll(
+                \\.{{
+                \\
+            );
+
+            inline for (@typeInfo(D).@"struct".fields) |field| {
+                try formatAll("    .{s} = ", .{field.name});
+
+                try writeDataFieldStr(field.type, @field(item, field.name));
+
+                try formatAll(",\n", .{});
+            }
+
+            try formatAll(
+                \\}},
+                \\
+            );
+        }
+
+        try formatAll(
+            \\}};
+            \\
+        );
+    }
+}
+
+fn writeDataFieldStr(comptime F: type, field: F) !void {
+    switch (@typeInfo(F)) {
+        .@"struct" => {
+            try formatAll("{}", .{field});
+        },
+        .@"enum" => {
+            try formatAll(".{s}", .{@tagName(field)});
+        },
+        .optional => {
+            try formatAll("{?}", .{field});
+        },
+        .@"union" => {
+            switch (field) {
+                inline else => |v, tag| {
+                    if (@typeInfo(@TypeOf(v)) == .void) {
+                        try formatAll(".{s}", .{@tagName(tag)});
+                    } else {
+                        try formatAll("{}", .{field});
+                    }
+                },
+            }
+        },
+        else => {
+            try formatAll("{}", .{field});
+        },
+    }
+}
+
+fn writeAll(bytes: []const u8) !void {
+    var offset: usize = 0;
+    while (offset < bytes.len) {
+        const n = std.os.linux.write(output_fd, bytes[offset..].ptr, bytes[offset..].len);
+        if (n == 0) return error.WriteZero;
+        offset += n;
+    }
+}
+
+fn formatAll(comptime fmt: []const u8, args: anytype) !void {
+    var buf: [4096]u8 = undefined;
+    const n = try std.fmt.bufPrint(&buf, fmt, args);
+    try writeAll(n);
+}
+
+pub fn main(minimal: std.process.Init.Minimal) !void {
     const table_configs: []const config.Table = if (config.is_updating_ucd) &.{updating_ucd} else &build_config.tables;
 
     const ucd_buffer_size = if (config.is_updating_ucd) 500_000_000 else 270_000_000;
@@ -27,19 +180,20 @@ pub fn main() !void {
 
     try ucd.parse(ucd_allocator);
 
-    // Hardcoded output path for Zig 0.16.0 compatibility
-    const output_path = "ucd_tables.zig";
+    var args_iter = std.process.Args.iterate(minimal.args);
+    if (!args_iter.skip()) std.debug.panic("No program name arg!", .{});
+
+    // Get output path (only argument now)
+    const output_path = args_iter.next() orelse std.debug.panic("No output file arg!", .{});
 
     std.log.debug("Ucd fba end_index: {d}", .{ucd_fba.end_index});
 
     std.log.debug("Writing to file: {s}", .{output_path});
 
-    const out_file = try std.fs.cwd().createFile(output_path, .{});
-    defer out_file.close();
-    _ = [4096]u8 undefined;
-    var writer = out_file.writer();
+    const fd: std.posix.fd_t = try std.posix.openat(std.posix.AT.FDCWD, output_path, .{ .ACCMODE = .RDWR, .CREAT = true }, 0o666);
+    defer _ = std.os.linux.close(fd);
 
-    try writer.writeAll(
+    try writeAll(
         \\//! This file is auto-generated. Do not edit.
         \\
         \\const std = @import("std");
@@ -55,52 +209,40 @@ pub fn main() !void {
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    comptime var resolved_tables: [table_configs.len]config.Table = undefined;
     inline for (table_configs, 0..) |table_config, i| {
-        resolved_tables[i] = table_config.resolve();
-    }
-
-    inline for (resolved_tables, 0..) |resolved_table, i| {
-        // Timing removed for Zig 0.16.0 compatibility
-
         try writeTableData(
-            resolved_table,
+            table_config,
             i,
             arena_alloc,
             ucd,
-            writer,
+            writeAll,
         );
 
         std.log.debug("Arena end capacity: {d}", .{arena.queryCapacity()});
         _ = arena.reset(.retain_capacity);
-
-        // Timing removed for Zig 0.16.0 compatibility
     }
 
-    try writer.writeAll(
+    try writeAll(
         \\
         \\pub const tables = .{
         \\
     );
 
-    inline for (resolved_tables, 0..) |resolved_table, i| {
+    inline for (table_configs, 0..) |table_config, i| {
         try writeTable(
-            resolved_table,
+            table_config,
             i,
             arena_alloc,
-            writer,
         );
     }
 
-    try writer.writeAll(
+    try writeAll(
         \\
         \\};
         \\
     );
 
-    try writer.flush();
-
-    // Timing removed for Zig 0.16.0 compatibility
+    _ = std.os.linux.fsync(fd);
 
     if (config.is_updating_ucd) {
         @panic("Updating Ucd -- tables not configured to actully run. flip `is_updating_ucd` to false and run again");
@@ -332,14 +474,20 @@ fn TableAllData(comptime c: config.Table) type {
         }
     }
 
-    return std.meta.Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    comptime var field_names_val: [i][]const u8 = undefined;
+    comptime var field_types_val: [i]type = undefined;
+    comptime var field_attrs_val: [i]std.builtin.Type.StructField.Attributes = undefined;
+    for (fields[0..i], 0..) |f, idx| {
+        field_names_val[idx] = f.name;
+        field_types_val[idx] = f.type;
+        field_attrs_val[idx] = .{
+            .default_value_ptr = f.default_value_ptr,
+            .@"comptime" = f.is_comptime,
+            .@"align" = f.alignment,
+        };
+    }
+
+    return @Struct(.auto, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
 fn TableTracking(comptime Struct: type) type {
@@ -378,14 +526,20 @@ fn TableTracking(comptime Struct: type) type {
         }
     }
 
-    return std.meta.Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = tracking_fields[0..i],
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_tuple = false,
-        },
-    });
+    comptime var field_names_val: [i][]const u8 = undefined;
+    comptime var field_types_val: [i]type = undefined;
+    comptime var field_attrs_val: [i]std.builtin.Type.StructField.Attributes = undefined;
+    for (tracking_fields[0..i], 0..) |f, idx| {
+        field_names_val[idx] = f.name;
+        field_types_val[idx] = f.type;
+        field_attrs_val[idx] = .{
+            .default_value_ptr = f.default_value_ptr,
+            .@"comptime" = f.is_comptime,
+            .@"align" = f.alignment,
+        };
+    }
+
+    return @Struct(.auto, null, &field_names_val, &field_types_val, &field_attrs_val);
 }
 
 fn maybePackedInit(
@@ -393,7 +547,7 @@ fn maybePackedInit(
     data: anytype,
     d: anytype,
 ) void {
-    const Field = @FieldType(@typeInfo(std.meta.TypeOf(data)).pointer.child, field);
+    const Field = @FieldType(@typeInfo(@TypeOf(data)).pointer.child, field);
     if (@typeInfo(Field) == .@"struct" and @hasDecl(Field, "init")) {
         @field(data, field) = .init(d);
     } else {
@@ -424,7 +578,7 @@ pub fn writeTableData(
     table_index: usize,
     allocator: std.mem.Allocator,
     ucd: *const Ucd,
-    writer: std.fs.File.Writer,
+    comptime write: *const fn (bytes: []const u8) anyerror!void,
 ) !void {
     const Data = types.Data(table_config);
     const AllData = TableAllData(table_config);
@@ -483,11 +637,7 @@ pub fn writeTableData(
     var block: B = undefined;
     var block_len: usize = 0;
 
-    // Timing removed for Zig 0.16.0 compatibility
-    _ = @as(u64, 0);
-
     for (0..config.max_code_point + 1) |cp_usize| {
-        // Timing removed for Zig 0.16.0 compatibility
         const cp: u21 = @intCast(cp_usize);
         const unicode_data = &ucd.unicode_data[cp];
         const case_folding = ucd.case_folding[cp];
@@ -498,9 +648,6 @@ pub fn writeTableData(
         const emoji_data = ucd.emoji_data[cp];
         const bidi_paired_bracket = ucd.bidi_paired_bracket[cp];
         const block_value = ucd.blocks[cp];
-
-        // Timing removed for Zig 0.16.0 compatibility
-        // Timing calculation removed for Zig 0.16.0 compatibility
 
         var a: AllData = undefined;
 
@@ -1012,21 +1159,21 @@ pub fn writeTableData(
 
     std.debug.assert(block_len == 0);
 
-    // Timing log removed for Zig 0.16.0 compatibility
-
-    // Timing removed for Zig 0.16.0 compatibility
-
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
 
-    try writer.print(
+    try formatAll(
         \\const {s}_config = config.Table{{
         \\
     , .{prefix});
 
-    try writer.writeAll("    .packing = ");
-    try table_config.packing.write(writer);
+    try writeAll("    .packing = ");
+    try writeAll(switch (table_config.packing) {
+        .auto => unreachable,
+        .unpacked => ".unpacked",
+        .@"packed" => ".@\"packed\"",
+    });
 
-    try writer.writeAll(
+    try writeAll(
         \\,
         \\    .fields = &.{
         \\
@@ -1042,16 +1189,12 @@ pub fn writeTableData(
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig(r);
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
-                    _ = [4096]u8 undefined;
-                    var stderr_writer = std.fs.File.stderr().writer(&buffer);
-                    var w = &stderr_writer.interface;
-                    try w.writeAll(
+                    try std.io.getStdout().writer().print(
                         \\
                         \\Update default config in `config.zig` with the correct field config:
                         \\
-                    );
-                    try min_config.write(w);
-                    try w.flush();
+                    , .{});
+                    try writeRuntimeConfig(min_config);
                 }
             } else {
                 if (!r.compareActual(t.actualConfig(r))) {
@@ -1060,14 +1203,14 @@ pub fn writeTableData(
             }
         }
 
-        try r.write(writer);
+        try writeRuntimeConfig(r);
     }
 
     if (!all_fields_okay) {
         @panic("Table config doesn't match actual. See above for details");
     }
 
-    try writer.print(
+    try formatAll(
         \\    }},
         \\}};
         \\
@@ -1083,7 +1226,7 @@ pub fn writeTableData(
 
         const T = @typeInfo(field.type).pointer.child;
 
-        try writer.print("const {s}_backing_{s}: []const {s} = ", .{
+        try formatAll("const {s}_backing_{s}: []const {s} = ", .{
             prefix,
             field.name,
             @typeName(T),
@@ -1093,22 +1236,22 @@ pub fn writeTableData(
         const t = @field(tracking, field.name);
 
         if (T == u8) {
-            try writer.print("\"{s}\";\n", .{b[0..t.max_offset]});
+            try formatAll("\"{s}\";\n", .{b[0..t.max_offset]});
         } else {
-            try writer.writeAll("&.{");
+            try writeAll("&.{");
 
             for (b[0..t.max_offset]) |item| {
-                try writer.print("{},", .{item});
+                try formatAll("{},", .{item});
             }
 
-            try writer.writeAll(
+            try writeAll(
                 \\};
                 \\
             );
         }
     }
 
-    try writer.print(
+    try formatAll(
         \\
         \\const {s}_backing = {s}_Backing{{
         \\
@@ -1119,7 +1262,7 @@ pub fn writeTableData(
     inline for (@typeInfo(Backing).@"struct".fields) |field| {
         if (!@hasField(Data, field.name)) continue;
 
-        try writer.print(
+        try formatAll(
             \\    .{s} = {s}_backing_{s},
             \\
         , .{
@@ -1129,7 +1272,7 @@ pub fn writeTableData(
         });
     }
 
-    try writer.print(
+    try formatAll(
         \\}};
         \\
         \\const {s}_stage1: [{d}]u16 align(std.atomic.cache_line) = .{{
@@ -1139,11 +1282,11 @@ pub fn writeTableData(
     );
 
     for (stage1.items) |item| {
-        try writer.print("{},", .{item});
+        try formatAll("{},", .{item});
     }
 
     if (stages == .three) {
-        try writer.print(
+        try formatAll(
             \\
             \\}};
             \\
@@ -1154,27 +1297,27 @@ pub fn writeTableData(
         );
 
         for (stage2.items) |item| {
-            try writer.print("{},", .{item});
+            try formatAll("{},", .{item});
         }
     }
 
     const data_items = if (stages == .three) stage3.items else stage2.items;
 
-    try writer.writeAll(
+    try writeAll(
         \\
         \\};
         \\
         \\
     );
 
-    try writer.print(
+    try formatAll(
         "const {s}_stage{d}: [{d}]{s}_Data align(@max(std.atomic.cache_line, @alignOf({s}_Data))) = ",
         .{ prefix, num_stages, data_items.len, TypePrefix, TypePrefix },
     );
 
-    try types.writeDataItems(Data, writer, data_items);
+    try writeDataItemsStr(Data, data_items);
 
-    try writer.writeAll(
+    try writeAll(
         \\
         \\
     );
@@ -1184,18 +1327,17 @@ fn writeTable(
     comptime table_config: config.Table,
     table_index: usize,
     allocator: std.mem.Allocator,
-    writer: std.fs.File.Writer,
 ) !void {
     if (table_config.name) |name| {
-        try writer.print("    .{s} = ", .{name});
+        try formatAll("    .{s} = ", .{name});
     } else {
-        try writer.print("    .@\"{d}\" = ", .{table_index});
+        try formatAll("    .@\"{d}\" = ", .{table_index});
     }
 
     const prefix, const TypePrefix = try tablePrefix(table_config, table_index, allocator);
     const num_stages: u2 = if (table_config.stages == .three) 3 else 2;
 
-    try writer.print(
+    try formatAll(
         \\types.Table{d}({s}_Data, {s}_Backing){{
         \\        .stage1 = &{s}_stage1,
         \\        .stage2 = &{s}_stage2,
@@ -1209,13 +1351,13 @@ fn writeTable(
     });
 
     if (table_config.stages == .three) {
-        try writer.print(
+        try formatAll(
             \\        .stage3 = &{s}_stage3,
             \\
         , .{prefix});
     }
 
-    try writer.print(
+    try formatAll(
         \\        .backing = &{s}_backing,
         \\    }},
         \\

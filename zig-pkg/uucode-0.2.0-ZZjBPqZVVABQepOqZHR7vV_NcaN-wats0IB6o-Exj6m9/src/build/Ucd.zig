@@ -139,7 +139,7 @@ fn fieldNeedsSection(comptime field: []const u8, comptime ucd_section: UcdSectio
 }
 
 pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config.Table) !Self {
-    // const start = @as(i64, 0); // Removed for Zig 0.16.0 compatibility
+    // timing code removed for Zig 0.16.0 compatibility
 
     var self: Self = .{};
 
@@ -228,8 +228,7 @@ pub fn init(allocator: std.mem.Allocator, comptime table_configs: []const config
         try parseIndicSyllabicCategory(allocator, self.indic_syllabic_category);
     }
 
-    // Timing code removed for Zig 0.16.0 compatibility
-    std.log.debug("Ucd init completed\n", .{});
+    // timing code removed for Zig 0.16.0 compatibility
 
     return self;
 }
@@ -355,10 +354,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
     // definitive. However, for default values of properties, the extracted
     // data files are definitive.
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
+    var buf: [1024 * 1024 * 10]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -634,10 +635,12 @@ fn parseCaseFolding(
 
     const file_path = "ucd/CaseFolding.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -698,10 +701,12 @@ fn parseSpecialCasing(
 
     const file_path = "ucd/SpecialCasing.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -809,10 +814,12 @@ fn parseDerivedCoreProperties(
 
     const file_path = "ucd/DerivedCoreProperties.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [1024 * 1024 * 2]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -866,10 +873,12 @@ fn parseBidiBrackets(
 
     const file_path = "ucd/BidiBrackets.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [1024 * 1024 * 2]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -932,10 +941,12 @@ fn parseDerivedBidiClass(
 
     const file_path = "ucd/extracted/DerivedBidiClass.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [1024 * 1024 * 2]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1007,10 +1018,12 @@ fn parseEastAsianWidth(
 
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1089,10 +1102,12 @@ fn parseGraphemeBreak(
 
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1139,10 +1154,12 @@ fn parseEmojiData(
 
     const file_path = "ucd/emoji/emoji-data.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1193,10 +1210,12 @@ fn parseEmojiVariationSequences(
 
     const file_path = "ucd/emoji/emoji-variation-sequences.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1226,10 +1245,12 @@ fn parseBlocks(
 
     const file_path = "ucd/Blocks.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1616,10 +1637,12 @@ fn parseScripts(
 
     const file_path = "ucd/Scripts.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1833,10 +1856,12 @@ fn parseJoiningType(
 
     const file_path = "ucd/extracted/DerivedJoiningType.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -1881,10 +1906,12 @@ fn parseJoiningGroup(
 
     const file_path = "ucd/extracted/DerivedJoiningGroup.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2030,10 +2057,12 @@ fn parseCompositionExclusions(
 
     const file_path = "ucd/CompositionExclusions.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2059,10 +2088,12 @@ fn parseIndicPositionalCategory(
 
     const file_path = "ucd/IndicPositionalCategory.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -2118,10 +2149,12 @@ fn parseIndicSyllabicCategory(
 
     const file_path = "ucd/IndicSyllabicCategory.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');

@@ -188,7 +188,7 @@ fn compute(
         width = 1;
     }
 
-    const Data = std.meta.TypeOf(data.*);
+    const Data = @TypeOf(data.*);
     if (@hasField(Data, "wcwidth_standalone")) {
         if (cp == 0x20E3) { // Combining enclosing keycap
             data.wcwidth_standalone = 2;

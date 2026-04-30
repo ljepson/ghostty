@@ -904,6 +904,7 @@ pub fn Data(comptime c: config.Table) type {
     return std.meta.Type(.{
         .@"struct" = .{
             .layout = if (c.packing == .@"packed") .@"packed" else .auto,
+            .backing_integer = null,
             .fields = &data_fields,
             .decls = &.{},
             .is_tuple = false,

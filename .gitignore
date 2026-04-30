@@ -11,8 +11,12 @@ zig-cache/
 .zig-cache/
 zig-out/
 zig-pkg/*
+!zig-pkg/uucode-0.1.0-ZZjBPj96QADXyt5sqwBJUnhaDYs_qBeeKijZvlRa0eqM/
+!zig-pkg/uucode-0.1.0-ZZjBPj96QADXyt5sqwBJUnhaDYs_qBeeKijZvlRa0eqM/**
 !zig-pkg/uucode-0.2.0-ZZjBPqZVVABQepOqZHR7vV_NcaN-wats0IB6o-Exj6m9/
 !zig-pkg/uucode-0.2.0-ZZjBPqZVVABQepOqZHR7vV_NcaN-wats0IB6o-Exj6m9/**
+!zig-pkg/wayland-0.5.0-dev-lQa1khrMAQDJDwYFKpdH3HizherB7sHo5dKMECfvxQHe/
+!zig-pkg/wayland-0.5.0-dev-lQa1khrMAQDJDwYFKpdH3HizherB7sHo5dKMECfvxQHe/**
 build-cmake/
 CMakeCache.txt
 CMakeFiles/

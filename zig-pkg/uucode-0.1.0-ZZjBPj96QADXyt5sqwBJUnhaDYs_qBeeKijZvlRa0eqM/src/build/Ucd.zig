@@ -87,7 +87,6 @@ const EmojiData = packed struct {
 const Self = @This();
 
 pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
-    // const start = std.Io.Clock.Timestamp.now(std.Io.Threaded.global_single_threaded.io(), .awake); // Removed for Zig 0.16.0 compatibility
     try parseUnicodeData(allocator, &self.unicode_data);
     try parseCaseFolding(allocator, &self.case_folding);
     try parseSpecialCasing(allocator, &self.special_casing);
@@ -97,9 +96,6 @@ pub fn parse(self: *Self, allocator: std.mem.Allocator) !void {
     try parseEmojiData(allocator, &self.emoji_data);
     try parseBlocks(allocator, &self.blocks);
     try parseBidiBrackets(allocator, &self.bidi_paired_bracket);
-
-    // Timing code removed for Zig 0.16.0 compatibility
-    std.log.debug("Ucd init completed\n", .{});
 }
 
 // Public for GraphemeBreakTest in src/grapheme.zig
@@ -153,10 +149,12 @@ fn parseUnicodeData(allocator: std.mem.Allocator, unicode_data: []UnicodeData) !
     // definitive. However, for default values of properties, the extracted
     // data files are definitive.
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
+    var buf: [1024 * 1024 * 10]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -377,10 +375,12 @@ fn parseCaseFolding(
 
     const file_path = "ucd/CaseFolding.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -441,10 +441,12 @@ fn parseSpecialCasing(
 
     const file_path = "ucd/SpecialCasing.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -548,10 +550,12 @@ fn parseDerivedCoreProperties(
 
     const file_path = "ucd/DerivedCoreProperties.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [1024 * 1024 * 2]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -597,10 +601,12 @@ fn parseBidiBrackets(
 
     const file_path = "ucd/BidiBrackets.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 2);
+    var buf: [1024 * 1024 * 2]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -663,10 +669,12 @@ fn parseEastAsianWidth(
 
     const file_path = "ucd/extracted/DerivedEastAsianWidth.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024 * 2]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -739,10 +747,12 @@ fn parseGraphemeBreak(
 
     const file_path = "ucd/auxiliary/GraphemeBreakProperty.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -789,10 +799,12 @@ fn parseEmojiData(
 
     const file_path = "ucd/emoji/emoji-data.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');
@@ -839,10 +851,12 @@ fn parseBlocks(
 
     const file_path = "ucd/Blocks.txt";
 
-    const file = try std.Io.Dir.openFile(std.Io.Dir.cwd(), std.Io.failing, file_path, .{});
-    defer file.close();
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, file_path, .{ .ACCMODE = .RDONLY }, 0);
+    defer _ = std.os.linux.close(fd);
 
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var buf: [1024 * 1024]u8 = undefined;
+    const bytes_read = std.os.linux.read(fd, &buf, buf.len);
+    const content = try allocator.dupe(u8, buf[0..bytes_read]);
     defer allocator.free(content);
 
     var lines = std.mem.splitScalar(u8, content, '\n');

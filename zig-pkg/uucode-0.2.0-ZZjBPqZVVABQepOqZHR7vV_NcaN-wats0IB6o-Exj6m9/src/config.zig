@@ -367,7 +367,7 @@ pub const Field = struct {
                 .max_value = self.max_value,
             };
 
-            inline for (@typeInfo(std.meta.TypeOf(overrides)).@"struct".fields) |f| {
+            inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
                 @field(result, f.name) = @field(overrides, f.name);
             }
 
@@ -545,7 +545,7 @@ pub const Field = struct {
     pub fn override(self: Field, overrides: anytype) Field {
         var result = self;
 
-        inline for (@typeInfo(std.meta.TypeOf(overrides)).@"struct".fields) |f| {
+        inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| {
             if (!is_updating_ucd and (std.mem.eql(u8, f.name, "name") or
                 std.mem.eql(u8, f.name, "type") or
                 std.mem.eql(u8, f.name, "shift_low") or

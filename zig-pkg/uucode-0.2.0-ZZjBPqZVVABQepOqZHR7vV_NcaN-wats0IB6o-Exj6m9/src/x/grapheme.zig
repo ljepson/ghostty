@@ -64,7 +64,7 @@ const inlineAssert = @import("config.zig").quirks.inlineAssert;
 // width of the remaining graphemes in the iterator, and `utf8Wcwidth` for the
 // width of a string.
 pub fn wcwidthNext(it: anytype) usize {
-    inlineAssert(@typeInfo(std.meta.TypeOf(it)) == .pointer);
+    inlineAssert(@typeInfo(@TypeOf(it)) == .pointer);
 
     const first = it.nextCodePoint() orelse return 0;
 
@@ -717,7 +717,7 @@ fn testGraphemeBreakNoControl(getActualIsBreak: fn (cp1: u21, cp2: u21, state: *
     const allocator = std.testing.allocator;
     const file_path = "ucd/auxiliary/GraphemeBreakTest.txt";
 
-    const file = try std.Io.Dir.cwd().openFile(std.Io.Threaded.global_single_threaded.io(), file_path, .{});
+    const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
     const content = try file.readToEndAlloc(allocator, 1024 * 1024 * 10);
@@ -821,7 +821,7 @@ pub fn precomputedGraphemeBreakNoControl(
         computeGraphemeBreakNoControl,
     );
     // 5 BreakState fields x (17 GraphemeBreak fields)^2 = 1445
-    inlineAssert(@sizeOf(std.meta.TypeOf(table)) == 1445);
+    inlineAssert(@sizeOf(@TypeOf(table)) == 1445);
     const result = table.get(gb1, gb2, state.*);
     state.* = result.state;
     return result.result;

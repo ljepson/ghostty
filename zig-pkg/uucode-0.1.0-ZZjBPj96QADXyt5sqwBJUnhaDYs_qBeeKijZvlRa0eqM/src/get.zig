@@ -14,7 +14,7 @@ fn TableData(comptime Table: anytype) type {
 }
 
 fn tableInfoFor(comptime field: []const u8) std.builtin.Type.StructField {
-    inline for (@typeInfo(std.meta.TypeOf(tables)).@"struct".fields) |tableInfo| {
+    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         if (@hasField(TableData(tableInfo.type), field)) {
             return tableInfo;
         }
@@ -24,7 +24,7 @@ fn tableInfoFor(comptime field: []const u8) std.builtin.Type.StructField {
 }
 
 fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
-    inline for (@typeInfo(std.meta.TypeOf(tables)).@"struct".fields) |tableInfo| {
+    inline for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         if (std.mem.eql(u8, tableInfo.name, table_name)) {
             return tableInfo;
         }
@@ -35,7 +35,7 @@ fn getTableInfo(comptime table_name: []const u8) std.builtin.Type.StructField {
 
 fn BackingFor(comptime field: []const u8) type {
     const tableInfo = tableInfoFor(field);
-    const Backing = @FieldType(@FieldType(std.meta.TypeOf(tables), tableInfo.name), "backing");
+    const Backing = @FieldType(@FieldType(@TypeOf(tables), tableInfo.name), "backing");
     return @FieldType(@typeInfo(Backing).pointer.child, field);
 }
 
@@ -46,7 +46,7 @@ pub fn backingFor(comptime field: []const u8) BackingFor(field) {
 
 fn TableFor(comptime field: []const u8) type {
     const tableInfo = tableInfoFor(field);
-    return @FieldType(std.meta.TypeOf(tables), tableInfo.name);
+    return @FieldType(@TypeOf(tables), tableInfo.name);
 }
 
 fn tableFor(comptime field: []const u8) TableFor(field) {
@@ -55,17 +55,17 @@ fn tableFor(comptime field: []const u8) TableFor(field) {
 
 fn GetTable(comptime table_name: []const u8) type {
     const tableInfo = getTableInfo(table_name);
-    return @FieldType(std.meta.TypeOf(tables), tableInfo.name);
+    return @FieldType(@TypeOf(tables), tableInfo.name);
 }
 
 fn getTable(comptime table_name: []const u8) GetTable(table_name) {
     return @field(tables, getTableInfo(table_name).name);
 }
 
-fn data(comptime table: anytype, cp: u21) TableData(std.meta.TypeOf(table)) {
+fn data(comptime table: anytype, cp: u21) TableData(@TypeOf(table)) {
     const stage1_idx = cp >> 8;
     const stage2_idx = cp & 0xFF;
-    if (@hasField(std.meta.TypeOf(table), "stage3")) {
+    if (@hasField(@TypeOf(table), "stage3")) {
         return table.stage3[table.stage2[table.stage1[stage1_idx] + stage2_idx]];
     } else {
         return table.stage2[table.stage1[stage1_idx] + stage2_idx];
@@ -83,14 +83,14 @@ pub fn TypeOfAll(comptime table_name: []const u8) type {
 
 pub const FieldEnum = blk: {
     var fields_len: usize = 0;
-    for (@typeInfo(std.meta.TypeOf(tables)).@"struct".fields) |tableInfo| {
+    for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         fields_len += @typeInfo(TableData(tableInfo.type)).@"struct".fields.len;
     }
 
     var fields: [fields_len]std.builtin.Type.EnumField = undefined;
     var i: usize = 0;
 
-    for (@typeInfo(std.meta.TypeOf(tables)).@"struct".fields) |tableInfo| {
+    for (@typeInfo(@TypeOf(tables)).@"struct".fields) |tableInfo| {
         for (@typeInfo(TableData(tableInfo.type)).@"struct".fields) |f| {
             fields[i] = .{
                 .name = f.name,
@@ -100,14 +100,7 @@ pub const FieldEnum = blk: {
         }
     }
 
-    break :blk std.meta.Type(.{
-        .@"enum" = .{
-            .tag_type = std.math.IntFittingRange(0, fields_len - 1),
-            .fields = &fields,
-            .decls = &[_]std.builtin.Type.Declaration{},
-            .is_exhaustive = true,
-        },
-    });
+    break :blk @Enum(std.math.IntFittingRange(0, fields_len - 1), .exhaustive, &fields, &std.simd.iota(std.math.IntFittingRange(0, fields_len - 1), fields_len));
 };
 
 fn DataField(comptime field: []const u8) type {
@@ -117,12 +110,12 @@ fn DataField(comptime field: []const u8) type {
 fn FieldValue(comptime field: []const u8) type {
     const D = DataField(field);
     if (@typeInfo(D) == .@"struct") {
-        if (@hasDecl(D, "unshift") and std.meta.TypeOf(D.unshift) != void) {
-            return @typeInfo(std.meta.TypeOf(D.unshift)).@"fn".return_type.?;
+        if (@hasDecl(D, "unshift") and @TypeOf(D.unshift) != void) {
+            return @typeInfo(@TypeOf(D.unshift)).@"fn".return_type.?;
         } else if (@hasDecl(D, "unpack")) {
-            return @typeInfo(std.meta.TypeOf(D.unpack)).@"fn".return_type.?;
-        } else if (@hasDecl(D, "value") and std.meta.TypeOf(D.value) != void) {
-            return @typeInfo(std.meta.TypeOf(D.value)).@"fn".return_type.?;
+            return @typeInfo(@TypeOf(D.unpack)).@"fn".return_type.?;
+        } else if (@hasDecl(D, "value") and @TypeOf(D.value) != void) {
+            return @typeInfo(@TypeOf(D.value)).@"fn".return_type.?;
         } else {
             return D;
         }
@@ -141,9 +134,9 @@ pub fn get(comptime field: FieldEnum, cp: u21) TypeOf(field) {
     const D = DataField(name);
     const table = comptime tableFor(name);
 
-    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "unpack") or @hasDecl(D, "unshift") or (@hasDecl(D, "value") and std.meta.TypeOf(D.value) != void))) {
+    if (@typeInfo(D) == .@"struct" and (@hasDecl(D, "unpack") or @hasDecl(D, "unshift") or (@hasDecl(D, "value") and @TypeOf(D.value) != void))) {
         const d = @field(data(table, cp), name);
-        if (@hasDecl(D, "unshift") and std.meta.TypeOf(D.unshift) != void) {
+        if (@hasDecl(D, "unshift") and @TypeOf(D.unshift) != void) {
             return d.unshift(cp);
         } else if (@hasDecl(D, "unpack")) {
             return d.unpack();
