@@ -123,6 +123,7 @@ pub fn postFork(cmd: *Command) Command.PostForkError!void {
             }
         }
 
-        std.Thread.sleep(25 * std.time.ns_per_ms);
+        var ts: linux.timespec = .{ .sec = 0, .nsec = 25 * std.time.ns_per_ms };
+        _ = linux.nanosleep(&ts, null);
     }
 }

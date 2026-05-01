@@ -23,7 +23,6 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
             .unwind_tables = .sync,
         }),
     });
-    
 
     deps.help_strings.addImport(build_data_exe);
 
@@ -347,7 +346,7 @@ fn addLinuxAppResources(
 
     // Process all our templates
     for (templates) |template| {
-        _ = b.addConfigHeader(.{
+        const config_header = b.addConfigHeader(.{
             .style = .{ .cmake = template[0] },
         }, .{
             .NAME = name,
@@ -358,7 +357,7 @@ fn addLinuxAppResources(
         // Template output has a single header line we want to remove.
         // We use `tail` to do it since its part of the POSIX standard.
         const tail = b.addSystemCommand(&.{ "tail", "-n", "+2" });
-        tail.setStdIn(.{ .lazy_path = b.path("config.h") });
+        tail.setStdIn(.{ .lazy_path = config_header.getOutputFile() });
 
         const copy = b.addInstallFile(
             tail.captureStdOut(.{}),

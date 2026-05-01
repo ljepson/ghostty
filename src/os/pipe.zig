@@ -7,7 +7,34 @@ const posix = std.posix;
 /// CLOEXEC on the file descriptors.
 pub fn pipe() ![2]posix.fd_t {
     switch (builtin.os.tag) {
-        else => return try posix.pipe2(.{ .CLOEXEC = true }),
+        else => {
+            var fds: [2]posix.fd_t = undefined;
+
+            if (@TypeOf(posix.system.pipe2) != void) {
+                switch (posix.errno(posix.system.pipe2(&fds, .{ .CLOEXEC = true }))) {
+                    .SUCCESS => return fds,
+                    else => |err| return posix.unexpectedErrno(err),
+                }
+            }
+
+            switch (posix.errno(posix.system.pipe(&fds))) {
+                .SUCCESS => {},
+                else => |err| return posix.unexpectedErrno(err),
+            }
+            errdefer {
+                _ = std.c.close(fds[0]);
+                _ = std.c.close(fds[1]);
+            }
+
+            for (fds) |fd| {
+                switch (posix.errno(posix.system.fcntl(fd, posix.F.SETFD, @as(u32, posix.FD_CLOEXEC)))) {
+                    .SUCCESS => {},
+                    else => |err| return posix.unexpectedErrno(err),
+                }
+            }
+
+            return fds;
+        },
         .windows => {
             var read: windows.HANDLE = undefined;
             var write: windows.HANDLE = undefined;

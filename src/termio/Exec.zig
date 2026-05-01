@@ -116,7 +116,10 @@ pub fn threadEnter(
 
         // We're in the child. Nothing more we can do but abnormal exit.
         // The Command will output some additional information.
-        posix.exit(1);
+        switch (builtin.os.tag) {
+            .linux => std.os.linux.exit(1),
+            else => std.c._exit(1),
+        }
     };
     errdefer self.subprocess.stop();
 
@@ -140,8 +143,8 @@ pub fn threadEnter(
     // Create our pipe that we'll use to kill our read thread.
     // pipe[0] is the read end, pipe[1] is the write end.
     const pipe = try internal_os.pipe();
-    errdefer std.os.linux.close(pipe[0]);
-    errdefer std.os.linux.close(pipe[1]);
+    errdefer _ = std.os.linux.close(pipe[0]);
+    errdefer _ = std.os.linux.close(pipe[1]);
 
     // Setup our stream so that we can write.
     var stream = xev.Stream.initFd(pty_fds.write);
@@ -159,7 +162,7 @@ pub fn threadEnter(
         if (builtin.os.tag == .windows) ReadThread.threadMainWindows else ReadThread.threadMainPosix,
         .{ pty_fds.read, io, pipe[0] },
     );
-    read_thread.setName("io-reader") catch {};
+    read_thread.setName(stdIo(), "io-reader") catch {};
 
     // Setup our threadata backend state to be our own
     td.backend = .{ .exec = .{
@@ -390,8 +393,8 @@ fn termiosTimer(
         // If our password input state changed on the terminal then
         // we notify the surface.
         {
-            td.renderer_state.mutex.lock();
-            defer td.renderer_state.mutex.unlock();
+            td.renderer_state.mutex.lock(stdIo()) catch break :mode_change;
+            defer td.renderer_state.mutex.unlock(stdIo());
             const t = td.renderer_state.terminal;
             if (t.flags.password_input == password_input) {
                 break :mode_change;
@@ -1281,7 +1284,7 @@ const Subprocess = struct {
 pub const ReadThread = struct {
     fn threadMainPosix(fd: posix.fd_t, io: *termio.Termio, quit: posix.fd_t) void {
         // Always close our end of the pipe when we exit.
-        defer std.os.linux.close(quit);
+        defer _ = std.os.linux.close(quit);
 
         // Right now, on Darwin, `std.Thread.setName` can only name the current
         // thread, and we have no way to get the current thread from within it,
@@ -1300,18 +1303,26 @@ pub const ReadThread = struct {
         // First thing, we want to set the fd to non-blocking. We do this
         // so that we can try to read from the fd in a tight loop and only
         // check the quit fd occasionally.
-        if (posix.fcntl(fd, posix.F.GETFL, 0)) |flags| {
-            _ = posix.fcntl(
-                fd,
-                posix.F.SETFL,
-                flags | @as(u32, @bitCast(posix.O{ .NONBLOCK = true })),
-            ) catch |err| {
-                log.warn("read thread failed to set flags err={}", .{err});
+        const flags_rc = posix.system.fcntl(fd, posix.F.GETFL, @as(usize, 0));
+        switch (posix.errno(flags_rc)) {
+            .SUCCESS => {
+                const flags: u32 = @intCast(flags_rc);
+                switch (posix.errno(posix.system.fcntl(
+                    fd,
+                    posix.F.SETFL,
+                    flags | @as(u32, @bitCast(posix.O{ .NONBLOCK = true })),
+                ))) {
+                    .SUCCESS => {},
+                    else => |err| {
+                        log.warn("read thread failed to set flags err={}", .{err});
+                        log.warn("this isn't a fatal error, but may cause performance issues", .{});
+                    },
+                }
+            },
+            else => |err| {
+                log.warn("read thread failed to get flags err={}", .{err});
                 log.warn("this isn't a fatal error, but may cause performance issues", .{});
-            };
-        } else |err| {
-            log.warn("read thread failed to get flags err={}", .{err});
-            log.warn("this isn't a fatal error, but may cause performance issues", .{});
+            },
         }
 
         // Build up the list of fds we're going to poll. We are looking

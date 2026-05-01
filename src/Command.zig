@@ -244,8 +244,8 @@ fn startPosix(self: *Command, arena: Allocator) !void {
     var stderr_buf: [1024]u8 = undefined;
     var stderr_writer = std.Io.File.stderr().writer(stdIo(), &stderr_buf);
     const stderr = &stderr_writer.interface;
-    const err = @as(isize, @intCast errno_val);
-    if (err == -@as(isize, @intCast(std.c.ENOENT))) {
+    const err = @as(isize, @intCast(errno_val));
+    if (err == -2) { // ENOENT
         stderr.print(
             \\Requested executable not found. Please verify the command is on
             \\the PATH and try again.
