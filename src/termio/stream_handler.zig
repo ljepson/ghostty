@@ -13,6 +13,10 @@ const terminal = @import("../terminal/main.zig");
 const terminfo = @import("../terminfo/main.zig");
 const posix = std.posix;
 
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 const log = std.log.scoped(.io_handler);
 
 /// This is used as the handler for the terminal.Stream type. This is
@@ -128,10 +132,10 @@ pub const StreamHandler = struct {
     ) void {
         // See messageWriter which has similar logic and explains why
         // we may have to do this.
-        if (self.surface_mailbox.push(msg, .{ .instant = {} }) == 0) {
-            self.renderer_state.mutex.unlock();
-            defer self.renderer_state.mutex.lock();
-            _ = self.surface_mailbox.push(msg, .{ .forever = {} });
+        if (self.surface_mailbox.push(msg, .instant) == 0) {
+            self.renderer_state.mutex.unlock(std.Io.Threaded.global_single_threaded.io());
+            defer self.renderer_state.mutex.lockUncancelable(std.Io.Threaded.global_single_threaded.io());
+            _ = self.surface_mailbox.push(msg, .forever);
         }
     }
 
@@ -158,8 +162,8 @@ pub const StreamHandler = struct {
         // Instant would have blocked. Release the renderer mutex,
         // wake up the renderer to allow it to process the message,
         // and then try again.
-        self.renderer_state.mutex.unlock();
-        defer self.renderer_state.mutex.lock();
+        self.renderer_state.mutex.unlock(stdIo());
+        defer self.renderer_state.mutex.lockUncancelable(stdIo());
         self.renderer_wakeup.notify() catch |err| {
             // This is an EXTREMELY unlikely case. We still don't return
             // and attempt to send the message because its most likely
@@ -470,7 +474,7 @@ pub const StreamHandler = struct {
 
             .decrqss => |decrqss| {
                 var response: [128]u8 = undefined;
-                var stream = std.io.fixedBufferStream(&response);
+                var stream = std.Io.fixedBufferStream(&response);
                 const writer = stream.writer();
 
                 // Offset the stream position to just past the response prefix.
@@ -1153,7 +1157,7 @@ pub const StreamHandler = struct {
             return;
         }
 
-        var host_buffer: [std.Uri.host_name_max]u8 = undefined;
+        var host_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
         const host = uri.getHost(&host_buffer) catch |err| switch (err) {
             error.UriMissingHost => {
                 log.warn("OSC 7 uri must contain a hostname: {}", .{err});
@@ -1223,7 +1227,8 @@ pub const StreamHandler = struct {
         const alloc = fba.allocator();
 
         var response: std.ArrayListUnmanaged(u8) = .empty;
-        const writer = response.writer(alloc);
+        try response.print(alloc, "", .{});
+        response.items.len = 0; // Reset after potential initial allocation
 
         var it = requests.constIterator(0);
         while (it.next()) |req| {

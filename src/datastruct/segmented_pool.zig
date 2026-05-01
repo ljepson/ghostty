@@ -19,12 +19,12 @@ pub fn SegmentedPool(comptime T: type, comptime prealloc: usize) type {
         i: usize = 0,
         available: usize = prealloc,
         len: usize = prealloc,
-        items: [prealloc]T = undefined,
+        items: []T = &([_]T{undefined} ** prealloc),
 
         pub fn deinit(self: *Self, alloc: Allocator) void {
             // Only free if we grew beyond the initial allocation
             if (self.len > prealloc) {
-                alloc.free(self.items.ptr[prealloc..self.len]);
+                alloc.free(self.items);
             }
             self.* = undefined;
         }
@@ -54,9 +54,9 @@ pub fn SegmentedPool(comptime T: type, comptime prealloc: usize) type {
             @memcpy(new_items[0..self.len], self.items[0..self.len]);
             // Free old buffer if it was heap-allocated
             if (self.len > prealloc) {
-                alloc.free(self.items.ptr[prealloc..self.len]);
+                alloc.free(self.items);
             }
-            self.items.ptr = new_items.ptr;
+            self.items = new_items;
             self.len = new_len;
             self.i = self.len;
             self.available = self.len;
