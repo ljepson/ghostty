@@ -16,7 +16,7 @@ const Font = @This();
 
 const std = @import("std");
 const debug = @import("std").debug;
-const io = @import("std").io;
+const io = std.Io;
 const fs = @import("std").fs;
 const math = @import("std").math;
 const mem = @import("std").mem;
@@ -25,7 +25,35 @@ const testing = @import("std").testing;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
-file: io.FixedBufferStream([]const u8),
+/// Wrapper to provide a seekable reader interface over a buffer for font loading.
+fn SeekableReader(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        reader_ctx: io.Reader,
+        buffer: []const u8,
+        seek_offset: usize = 0,
+
+        pub fn init(buffer: []const u8) Self {
+            return .{
+                .reader_ctx = io.Reader.fixed(buffer),
+                .buffer = buffer,
+                .seek_offset = 0,
+            };
+        }
+
+        pub fn seekTo(self: *Self, offset: usize) !void {
+            self.seek_offset = offset;
+        }
+
+        pub fn reader(self: *Self) *io.Reader {
+            return &self.reader_ctx;
+        }
+    };
+}
+
+const FileReader = SeekableReader([]const u8);
+
+file: FileReader,
 dir: Directory,
 meta: Meta,
 
@@ -75,7 +103,7 @@ pub const LoadBufferError = ValidateMagicError || Directory.InitError || Meta.In
 /// Loads and validates a font from a buffer. Do not use `deinit` when using
 /// this function, as it will produce illegal behavior.
 pub fn loadBuffer(buffer: []const u8) LoadBufferError!Font {
-    var file = io.fixedBufferStream(buffer);
+    var file = FileReader.init(buffer);
     try validateMagic(&file);
     const dir = try Directory.init(&file);
     const meta = try Meta.init(&file, dir);
@@ -107,7 +135,7 @@ const ValidateMagicError = error{
     InvalidFormat,
 } || FileError;
 
-fn validateMagic(file: *io.FixedBufferStream([]const u8)) ValidateMagicError!void {
+fn validateMagic(file: *FileReader) ValidateMagicError!void {
     var header = [_]u8{0} ** 4;
     try file.reader().readNoEof(&header);
     var header_ok: bool = false;
@@ -142,7 +170,7 @@ const Directory = struct {
         MissingRequiredTable,
     } || FileError;
 
-    fn init(file: *io.FixedBufferStream([]const u8)) InitError!Directory {
+    fn init(file: *FileReader) InitError!Directory {
         var result: Directory = result: {
             var r: Directory = undefined;
             inline for (@typeInfo(Directory).@"struct".fields) |f| {
@@ -279,7 +307,7 @@ const Meta = struct {
         InvalidIndexToLocFormat,
     } || FileError;
 
-    fn init(file: *io.FixedBufferStream([]const u8), dir: Directory) InitError!Meta {
+    fn init(file: *FileReader, dir: Directory) InitError!Meta {
         const cmap_subtable_offset: CmapSubtable = cmap_subtable_offset: {
             // We don't really do a lot of hard work here to look for the table; we
             // just look for either Windows or Unicode platform with the appropriate

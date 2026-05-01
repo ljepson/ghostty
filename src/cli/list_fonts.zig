@@ -139,7 +139,10 @@ fn runArgs(alloc_gpa: Allocator, argsIter: anytype) !u8 {
         const gop = try map.getOrPut(family);
         if (!gop.found_existing) {
             try families.append(alloc, family);
-            gop.value_ptr.* = .{};
+            gop.value_ptr.* = .{
+                .items = &[_][]const u8{},
+                .capacity = 0,
+            };
         }
         try gop.value_ptr.append(alloc, full_name);
     }

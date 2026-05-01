@@ -986,7 +986,8 @@ const Subprocess = struct {
                 break :cwd proposed;
             }
 
-            if (std.fs.cwd().access(proposed, .{})) {
+            const io = std.Io.Threaded.global_single_threaded.io();
+            if (std.Io.Dir.cwd().access(proposed, io, .{})) {
                 break :cwd proposed;
             } else |err| {
                 log.warn("cannot access cwd, ignoring: {}", .{err});

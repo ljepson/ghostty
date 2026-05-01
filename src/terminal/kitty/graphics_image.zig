@@ -198,12 +198,16 @@ pub const LoadingImage = struct {
         // The size from stat on may be larger than our expected size because
         // shared memory has to be a multiple of the page size.
         const stat_size: usize = stat: {
-            const stat = std.posix.fstat(fd) catch |err| {
-                log.warn("unable to fstat shared memory {s}: {}", .{ path, err });
+            var stat_buf: std.c.Stat = undefined;
+            const fd_u64 = @as(u64, @intCast(fd));
+            const stat_buf_ptr = @intFromPtr(&stat_buf);
+            const ret = std.os.linux.syscall2(108, fd_u64, stat_buf_ptr);
+            if (@as(isize, @intCast(ret)) < 0) {
+                log.warn("unable to fstat shared memory {s}: {}", .{ path, std.posix.errno(fd) });
                 return error.InvalidData;
-            };
-            if (stat.size <= 0) return error.InvalidData;
-            break :stat @intCast(stat.size);
+            }
+            if (stat_buf.size <= 0) return error.InvalidData;
+            break :stat @intCast(stat_buf.size);
         };
 
         const expected_size: usize = switch (self.image.format) {

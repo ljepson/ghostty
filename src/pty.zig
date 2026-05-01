@@ -153,19 +153,20 @@ const PosixPty = struct {
         // Set CLOEXEC on the master fd, only the slave fd should be inherited
         // by the child process (shell/command).
         cloexec: {
-            const flags = posix.fcntl(master_fd, posix.F.GETFD, 0) catch |err| {
-                log.warn("error getting flags for master fd err={}", .{err});
+            const flags = std.os.linux.fcntl(master_fd, std.os.linux.F.GETFD, 0);
+            if (@as(isize, @bitCast(flags)) == -1) {
+                log.warn("error getting flags for master fd", .{});
                 break :cloexec;
-            };
+            }
 
-            _ = posix.fcntl(
+            if (std.os.linux.fcntl(
                 master_fd,
-                posix.F.SETFD,
-                flags | posix.FD_CLOEXEC,
-            ) catch |err| {
-                log.warn("error setting CLOEXEC on master fd err={}", .{err});
+                std.os.linux.F.SETFD,
+                flags | std.os.linux.FD_CLOEXEC,
+            ) == @as(usize, @bitCast(@as(isize, -1)))) {
+                log.warn("error setting CLOEXEC on master fd", .{});
                 break :cloexec;
-            };
+            }
         }
 
         // Enable UTF-8 mode. I think this is on by default on Linux but it

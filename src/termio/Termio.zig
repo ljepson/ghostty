@@ -139,10 +139,7 @@ const ThreadEnterState = struct {
             input[i] = switch (item) {
                 .raw => |v| .{ .string = try alloc.dupe(u8, v) },
                 .path => |path| file: {
-                    const f = std.fs.cwd().openFile(
-                        path,
-                        .{},
-                    ) catch |err| {
+                    const f = std.c.openat(std.c.AT_FDCWD, path, std.c.O.RDONLY) catch |err| {
                         log.warn("failed to open input file={s} err={}", .{
                             path,
                             err,
@@ -160,7 +157,7 @@ const ThreadEnterState = struct {
 
     const Input = union(enum) {
         string: []const u8,
-        file: std.fs.File,
+        file: std.Io.File,
     };
 };
 
