@@ -65,11 +65,12 @@ pub fn run(alloc: Allocator) !u8 {
     defer config.deinit();
 
     var buffer: [1024]u8 = undefined;
-    const stdout: std.fs.File = .stdout();
-    var stdout_writer = stdout.writer(&buffer);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const stdout_file = std.Io.File.stdout();
+    var stdout_writer = stdout_file.writerStreaming(io, &buffer);
     const writer = &stdout_writer.interface;
 
-    if (tui.can_pretty_print and !opts.plain and stdout.isTty()) {
+    if (tui.can_pretty_print and !opts.plain and try stdout_file.isTty(io)) {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
         return prettyPrint(arena.allocator(), config.keybind);

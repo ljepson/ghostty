@@ -14,6 +14,10 @@ const Entry = @import("Entry.zig");
 // 512KB - sufficient for approximately 10k entries
 const MAX_CACHE_SIZE = 512 * 1024;
 
+fn io() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// Path to a file where the cache is stored.
 path: []const u8,
 
@@ -49,7 +53,7 @@ pub fn defaultPath(
 /// This removes the cache file from disk, effectively clearing all cached
 /// SSH terminfo entries.
 pub fn clear(self: DiskCache) !void {
-    std.fs.cwd().deleteFile(self.path) catch |err| switch (err) {
+    std.Io.Dir.cwd().deleteFile(io(), self.path) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,
     };
@@ -57,15 +61,7 @@ pub fn clear(self: DiskCache) !void {
 
 pub const AddResult = enum { added, updated };
 
-pub const AddError = std.fs.Dir.MakeError ||
-    std.fs.Dir.StatFileError ||
-    std.fs.File.OpenError ||
-    std.fs.File.ChmodError ||
-    std.io.Reader.LimitedAllocError ||
-    FixupPermissionsError ||
-    ReadEntriesError ||
-    WriteCacheFileError ||
-    Error;
+pub const AddError = anyerror;
 
 /// Add or update a hostname entry in the cache.
 /// Returns AddResult.added for new entries or AddResult.updated for existing ones.
@@ -79,36 +75,41 @@ pub fn add(
 
     // Create cache directory if needed
     if (std.fs.path.dirname(self.path)) |dir| {
-        std.fs.cwd().makePath(dir) catch |err| switch (err) {
+        std.Io.Dir.cwd().createDirPath(io(), dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
     }
 
     // Open or create cache file with secure permissions
-    const file = std.fs.createFileAbsolute(self.path, .{
+    const file = std.Io.Dir.createFileAbsolute(io(), self.path, .{
         .read = true,
         .truncate = false,
-        .mode = 0o600,
+        .permissions = .fromMode(0o600),
     }) catch |err| switch (err) {
         error.PathAlreadyExists => blk: {
-            const existing_file = try std.fs.openFileAbsolute(
+            const existing_file = try std.Io.Dir.openFileAbsolute(
+                io(),
                 self.path,
                 .{ .mode = .read_write },
             );
-            errdefer std.fs.File.close(existing_file, std.Io.Threaded.global_single_threaded.io());
+            errdefer existing_file.close(io());
             try fixupPermissions(existing_file);
             break :blk existing_file;
         },
         else => return err,
     };
-    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
+    defer file.close(io());
 
     // Lock
     // Causes a compile failure in the Zig std library on Windows, see:
     // https://github.com/ziglang/zig/issues/18430
-    if (comptime builtin.os.tag != .windows) _ = file.tryLock(.exclusive) catch return error.CacheIsLocked;
-    defer if (comptime builtin.os.tag != .windows) file.unlock();
+    if (comptime builtin.os.tag != .windows) {
+        if (!(file.tryLock(io(), .exclusive) catch return error.CacheIsLocked)) {
+            return error.CacheIsLocked;
+        }
+    }
+    defer if (comptime builtin.os.tag != .windows) file.unlock(io());
 
     var entries = try readEntries(alloc, file);
     defer deinitEntries(alloc, &entries);
@@ -124,13 +125,13 @@ pub fn add(
         gop.key_ptr.* = hostname_copy;
         gop.value_ptr.* = .{
             .hostname = gop.key_ptr.*,
-            .timestamp = std.time.timestamp(),
+            .timestamp = Entry.nowTimestamp(),
             .terminfo_version = terminfo_copy,
         };
         break :add .added;
     } else update: {
         // Update timestamp for existing entry
-        gop.value_ptr.timestamp = std.time.timestamp();
+        gop.value_ptr.timestamp = Entry.nowTimestamp();
         break :update .updated;
     };
 
@@ -138,11 +139,7 @@ pub fn add(
     return result;
 }
 
-pub const RemoveError = std.fs.File.OpenError ||
-    FixupPermissionsError ||
-    ReadEntriesError ||
-    WriteCacheFileError ||
-    Error;
+pub const RemoveError = anyerror;
 
 /// Remove a hostname entry from the cache.
 /// No error is returned if the hostname doesn't exist or the cache file is missing.
@@ -154,21 +151,26 @@ pub fn remove(
     if (!isValidCacheKey(hostname)) return error.HostnameIsInvalid;
 
     // Open our file
-    const file = std.fs.openFileAbsolute(
+    const file = std.Io.Dir.openFileAbsolute(
+        io(),
         self.path,
         .{ .mode = .read_write },
     ) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
     };
-    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
+    defer file.close(io());
     try fixupPermissions(file);
 
     // Lock
     // Causes a compile failure in the Zig std library on Windows, see:
     // https://github.com/ziglang/zig/issues/18430
-    if (comptime builtin.os.tag != .windows) _ = file.tryLock(.exclusive) catch return error.CacheIsLocked;
-    defer if (comptime builtin.os.tag != .windows) file.unlock();
+    if (comptime builtin.os.tag != .windows) {
+        if (!(file.tryLock(io(), .exclusive) catch return error.CacheIsLocked)) {
+            return error.CacheIsLocked;
+        }
+    }
+    defer if (comptime builtin.os.tag != .windows) file.unlock(io());
 
     // Read existing entries
     var entries = try readEntries(alloc, file);
@@ -184,9 +186,7 @@ pub fn remove(
     try self.writeCacheFile(entries, null);
 }
 
-pub const ContainsError = std.fs.File.OpenError ||
-    ReadEntriesError ||
-    error{HostnameIsInvalid};
+pub const ContainsError = anyerror;
 
 /// Check if a hostname exists in the cache.
 /// Returns false if the cache file doesn't exist.
@@ -198,14 +198,15 @@ pub fn contains(
     if (!isValidCacheKey(hostname)) return error.HostnameIsInvalid;
 
     // Open our file
-    const file = std.fs.openFileAbsolute(
+    const file = std.Io.Dir.openFileAbsolute(
+        io(),
         self.path,
         .{},
     ) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => return err,
     };
-    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
+    defer file.close(io());
 
     // Read existing entries
     var entries = try readEntries(alloc, file);
@@ -214,26 +215,21 @@ pub fn contains(
     return entries.contains(hostname);
 }
 
-pub const FixupPermissionsError = (std.fs.File.StatError || std.fs.File.ChmodError);
+pub const FixupPermissionsError = anyerror;
 
-fn fixupPermissions(file: std.fs.File) FixupPermissionsError!void {
+fn fixupPermissions(file: std.Io.File) FixupPermissionsError!void {
     // Windows does not support chmod
     if (comptime builtin.os.tag == .windows) return;
 
     // Ensure file has correct permissions (readable/writable by
     // owner only)
-    const stat = try file.stat();
-    if (stat.mode & 0o777 != 0o600) {
-        try file.chmod(0o600);
+    const stat = try file.stat(io());
+    if (stat.permissions.toMode() & 0o777 != 0o600) {
+        try file.setPermissions(io(), .fromMode(0o600));
     }
 }
 
-pub const WriteCacheFileError = std.fs.Dir.OpenError ||
-    std.fs.AtomicFile.InitError ||
-    std.fs.AtomicFile.FlushError ||
-    std.fs.AtomicFile.FinishError ||
-    Entry.FormatError ||
-    error{InvalidCachePath};
+pub const WriteCacheFileError = anyerror || error{InvalidCachePath};
 
 fn writeCacheFile(
     self: DiskCache,
@@ -243,24 +239,27 @@ fn writeCacheFile(
     const cache_dir = std.fs.path.dirname(self.path) orelse return error.InvalidCachePath;
     const cache_basename = std.fs.path.basename(self.path);
 
-    var dir = try std.fs.cwd().openDir(cache_dir, .{});
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(io(), cache_dir, .{});
+    defer dir.close(io());
 
     var buf: [1024]u8 = undefined;
-    var atomic_file = try dir.atomicFile(cache_basename, .{
-        .mode = 0o600,
-        .write_buffer = &buf,
+    var atomic_file = try dir.createFileAtomic(io(), cache_basename, .{
+        .permissions = .fromMode(0o600),
+        .replace = true,
     });
-    defer atomic_file.deinit();
+    defer atomic_file.deinit(io());
+    var file_writer = atomic_file.file.writer(io(), &buf);
+    const writer = &file_writer.interface;
 
     var iter = entries.iterator();
     while (iter.next()) |kv| {
         // Only write non-expired entries
         if (kv.value_ptr.isExpired(expire_days)) continue;
-        try kv.value_ptr.format(&atomic_file.file_writer.interface);
+        try kv.value_ptr.format(writer);
     }
 
-    try atomic_file.finish();
+    try writer.flush();
+    try atomic_file.replace(io());
 }
 
 /// List all entries in the cache.
@@ -271,14 +270,15 @@ pub fn list(
     alloc: Allocator,
 ) !std.StringHashMap(Entry) {
     // Open our file
-    const file = std.fs.openFileAbsolute(
+    const file = std.Io.Dir.openFileAbsolute(
+        io(),
         self.path,
         .{},
     ) catch |err| switch (err) {
         error.FileNotFound => return .init(alloc),
         else => return err,
     };
-    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
+    defer file.close(io());
     return readEntries(alloc, file);
 }
 
@@ -299,13 +299,14 @@ pub fn deinitEntries(
     entries.deinit();
 }
 
-pub const ReadEntriesError = std.mem.Allocator.Error || std.io.Reader.LimitedAllocError;
+pub const ReadEntriesError = anyerror;
 
 fn readEntries(
     alloc: Allocator,
-    file: std.fs.File,
+    file: std.Io.File,
 ) ReadEntriesError!std.StringHashMap(Entry) {
-    var reader = file.reader(&.{});
+    var buf: [4096]u8 = undefined;
+    var reader = file.reader(io(), &buf);
     const content = try reader.interface.allocRemaining(
         alloc,
         .limited(MAX_CACHE_SIZE),
@@ -378,7 +379,7 @@ fn isValidHost(host: []const u8) bool {
     // We also accept valid IP addresses. In practice, IPv4 addresses are also
     // considered valid hostnames due to their overlapping syntax, so we can
     // simplify this check to be IPv6-specific.
-    if (std.net.Address.parseIp6(host, 0)) |_| {
+    if (std.Io.net.IpAddress.parseIp6(host, 0)) |_| {
         return true;
     } else |_| {
         return false;

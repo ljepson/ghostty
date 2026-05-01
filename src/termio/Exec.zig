@@ -24,12 +24,30 @@ const Command = @import("../Command.zig");
 const SegmentedPool = @import("../datastruct/main.zig").SegmentedPool;
 const ptypkg = @import("../pty.zig");
 const Pty = ptypkg.Pty;
-const EnvMap = std.process.EnvMap;
+const EnvMap = std.process.Environ.Map;
 const PasswdEntry = internal_os.passwd.Entry;
 const windows = internal_os.windows;
 const ProcessInfo = @import("../pty.zig").ProcessInfo;
 
 const log = std.log.scoped(.io_exec);
+
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
+fn nowTimestamp() std.Io.Timestamp {
+    return std.Io.Clock.awake.now(stdIo());
+}
+
+fn durationSince(start: std.Io.Timestamp, end: std.Io.Timestamp) u64 {
+    const ns = start.durationTo(end).toNanoseconds();
+    if (ns <= 0) return 0;
+    return std.math.cast(u64, ns) orelse std.math.maxInt(u64);
+}
+
+fn sleepMs(ms: i64) void {
+    std.Io.sleep(stdIo(), std.Io.Duration.fromMilliseconds(ms), .awake) catch {};
+}
 
 /// The termios poll rate in milliseconds.
 const TERMIOS_POLL_MS = 200;
@@ -117,7 +135,7 @@ pub fn threadEnter(
     errdefer if (process) |*p| p.deinit();
 
     // Track our process start time for abnormal exits
-    const process_start = try std.time.Instant.now();
+    const process_start = nowTimestamp();
 
     // Create our pipe that we'll use to kill our read thread.
     // pipe[0] is the read end, pipe[1] is the write end.
@@ -276,8 +294,8 @@ fn processExitCommon(td: *termio.Termio.ThreadData, exit_code: u32) void {
 
     // Determine how long the process was running for.
     const runtime_ms: ?u64 = runtime: {
-        const process_end = std.time.Instant.now() catch break :runtime null;
-        const runtime_ns = process_end.since(execdata.start);
+        const process_end = nowTimestamp();
+        const runtime_ns = durationSince(execdata.start, process_end);
         const runtime_ms = runtime_ns / std.time.ns_per_ms;
         break :runtime runtime_ms;
     };
@@ -499,7 +517,7 @@ pub const ThreadData = struct {
     const WRITE_REQ_PREALLOC = std.math.pow(usize, 2, 5);
 
     /// Process start time and boolean of whether its already exited.
-    start: std.time.Instant,
+    start: std.Io.Timestamp,
     exited: bool = false,
 
     /// The data stream is the main IO for the pty.
@@ -579,6 +597,7 @@ const Subprocess = struct {
     const c = @cImport({
         @cInclude("errno.h");
         @cInclude("signal.h");
+        @cInclude("sys/wait.h");
         @cInclude("unistd.h");
     });
 
@@ -671,10 +690,11 @@ const Subprocess = struct {
             }
 
             var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
-            const exe_bin_path = std.fs.selfExePath(&exe_buf) catch |err| {
+            const exe_bin_path_len = std.process.executablePath(stdIo(), &exe_buf) catch |err| {
                 log.warn("failed to get ghostty exe path err={}", .{err});
                 break :ghostty_path;
             };
+            const exe_bin_path = exe_buf[0..exe_bin_path_len];
             const exe_dir = std.fs.path.dirname(exe_bin_path) orelse break :ghostty_path;
             log.debug("appending ghostty bin to path dir={s}", .{exe_dir});
 
@@ -749,7 +769,7 @@ const Subprocess = struct {
         // VTE_VERSION is set by gnome-terminal and other VTE-based terminals.
         // We don't want our child processes to think we're running under VTE.
         // This is not apprt-specific, so we do it here.
-        env.remove("VTE_VERSION");
+        _ = env.swapRemove("VTE_VERSION");
 
         // Setup our shell integration, if we can.
         const shell_command: configpkg.Command = shell: {
@@ -1182,10 +1202,11 @@ const Subprocess = struct {
             // The gist is that it lets us detect when children
             // are still alive without blocking so that we can
             // kill them again.
-            const res = posix.waitpid(pid, std.c.W.NOHANG);
-            log.debug("waitpid result={}", .{res.pid});
-            if (res.pid != 0) break;
-            std.Thread.sleep(10 * std.time.ns_per_ms);
+            var status: c_int = 0;
+            const res = c.waitpid(pid, &status, c.WNOHANG);
+            log.debug("waitpid result={}", .{res});
+            if (res != 0) break;
+            sleepMs(10);
         }
     }
 
@@ -1205,7 +1226,7 @@ const Subprocess = struct {
             const pgid = c.getpgid(pid);
             if (pgid == my_pgid) {
                 log.warn("pgid is our own, retrying", .{});
-                std.Thread.sleep(10 * std.time.ns_per_ms);
+                sleepMs(10);
                 continue;
             }
 

@@ -48,7 +48,10 @@ pub fn run(alloc: Allocator) !u8 {
     // critical where setting up the defer cleanup is a problem.
 
     var buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&buffer);
+    var stderr_writer = std.Io.File.stderr().writerStreaming(
+        std.Io.Threaded.global_single_threaded.io(),
+        &buffer,
+    );
     const stderr = &stderr_writer.interface;
 
     var opts: Options = .{};
@@ -137,7 +140,7 @@ fn runInner(alloc: Allocator, stderr: *std.Io.Writer) !u8 {
     }
 
     const command = command: {
-        var buffer: std.io.Writer.Allocating = .init(alloc);
+        var buffer: std.Io.Writer.Allocating = .init(alloc);
         defer buffer.deinit();
         const writer = &buffer.writer;
         try writer.writeAll(editor);
@@ -158,11 +161,13 @@ fn runInner(alloc: Allocator, stderr: *std.Io.Writer) !u8 {
     // so this is not a big deal.
     comptime assert(builtin.link_libc);
 
-    const err = std.posix.execvpeZ(
+    const argv: [*:null]const ?[*:0]const u8 = &[_:null]?[*:0]const u8{
         "/bin/sh",
-        &.{ "/bin/sh", "-c", command },
-        std.c.environ,
-    );
+        "-c",
+        command.ptr,
+    };
+    const rc = std.c.execve("/bin/sh", argv, std.c.environ);
+    const err = std.c.errno(rc);
 
     // If we reached this point then exec failed.
     try stderr.print(

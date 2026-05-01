@@ -23,6 +23,20 @@ const ProcessInfo = @import("../pty.zig").ProcessInfo;
 
 const log = std.log.scoped(.io_exec);
 
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
+fn nowTimestamp() std.Io.Timestamp {
+    return std.Io.Clock.awake.now(stdIo());
+}
+
+fn durationSince(start: std.Io.Timestamp, end: std.Io.Timestamp) u64 {
+    const ns = start.durationTo(end).toNanoseconds();
+    if (ns <= 0) return 0;
+    return std.math.cast(u64, ns) orelse std.math.maxInt(u64);
+}
+
 /// Mutex state argument for queueMessage.
 pub const MutexState = enum { locked, unlocked };
 
@@ -65,7 +79,7 @@ terminal_stream: StreamHandler.Stream,
 
 /// Last time the cursor was reset. This is used to prevent message
 /// flooding with cursor resets.
-last_cursor_reset: ?std.time.Instant = null,
+last_cursor_reset: ?std.Io.Timestamp = null,
 
 /// State we have for thread enter. This may be null if we don't need
 /// to keep track of any state or if its already been freed.
@@ -422,8 +436,8 @@ pub fn changeConfig(self: *Termio, td: *ThreadData, config: *DerivedConfig) !voi
     // The remainder of this function is modifying terminal state or
     // the read thread data, all of which requires holding the renderer
     // state lock.
-    self.renderer_state.mutex.lock();
-    defer self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
+    defer self.renderer_state.mutex.unlock(stdIo());
 
     // Deinit our old config. We do this in the lock because the
     // stream handler may be referencing the old config (i.e. enquiry resp)
@@ -473,8 +487,8 @@ pub fn resize(
 
     // Enter the critical area that we want to keep small
     {
-        self.renderer_state.mutex.lock();
-        defer self.renderer_state.mutex.unlock();
+        self.renderer_state.mutex.lockUncancelable(stdIo());
+        defer self.renderer_state.mutex.unlock(stdIo());
 
         // Update the size of our terminal state
         try self.terminal.resize(
@@ -504,8 +518,8 @@ pub fn resize(
 
 /// Make a size report.
 pub fn sizeReport(self: *Termio, td: *ThreadData, style: termio.Message.SizeReport) !void {
-    self.renderer_state.mutex.lock();
-    defer self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
+    defer self.renderer_state.mutex.unlock(stdIo());
     try self.sizeReportLocked(td, style);
 }
 
@@ -534,8 +548,8 @@ fn sizeReportLocked(self: *Termio, td: *ThreadData, style: termio.Message.SizeRe
 /// Reset the synchronized output mode. This is usually called by timer
 /// expiration from the termio thread.
 pub fn resetSynchronizedOutput(self: *Termio) void {
-    self.renderer_state.mutex.lock();
-    defer self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
+    defer self.renderer_state.mutex.unlock(stdIo());
     self.terminal.modes.set(.synchronized_output, false);
     self.renderer_wakeup.notify() catch {};
 }
@@ -543,8 +557,8 @@ pub fn resetSynchronizedOutput(self: *Termio) void {
 /// Clear the screen.
 pub fn clearScreen(self: *Termio, td: *ThreadData, history: bool) !void {
     {
-        self.renderer_state.mutex.lock();
-        defer self.renderer_state.mutex.unlock();
+        self.renderer_state.mutex.lockUncancelable(stdIo());
+        defer self.renderer_state.mutex.unlock(stdIo());
 
         // If we're on the alternate screen, we do not clear. Since this is an
         // emulator-level screen clear, this messes up the running programs
@@ -600,16 +614,16 @@ pub fn scrollViewport(
     self: *Termio,
     scroll: terminalpkg.Terminal.ScrollViewport,
 ) void {
-    self.renderer_state.mutex.lock();
-    defer self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
+    defer self.renderer_state.mutex.unlock(stdIo());
     self.terminal.scrollViewport(scroll);
 }
 
 /// Jump the viewport to the prompt.
 pub fn jumpToPrompt(self: *Termio, delta: isize) !void {
     {
-        self.renderer_state.mutex.lock();
-        defer self.renderer_state.mutex.unlock();
+        self.renderer_state.mutex.lockUncancelable(stdIo());
+        defer self.renderer_state.mutex.unlock(stdIo());
         self.terminal.screens.active.scroll(.{ .delta_prompt = delta });
     }
 
@@ -618,9 +632,9 @@ pub fn jumpToPrompt(self: *Termio, delta: isize) !void {
 
 /// Called when focus is gained or lost (when focus events are enabled)
 pub fn focusGained(self: *Termio, td: *ThreadData, focused: bool) !void {
-    self.renderer_state.mutex.lock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
     const focus_event = self.renderer_state.terminal.modes.get(.focus_event);
-    self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.unlock(stdIo());
 
     // If we have focus events enabled, we send the focus event.
     if (focus_event) {
@@ -643,8 +657,8 @@ pub fn focusGained(self: *Termio, td: *ThreadData, focused: bool) !void {
 pub fn processOutput(self: *Termio, buf: []const u8) void {
     // We are modifying terminal state from here on out and we need
     // the lock to grab our read data.
-    self.renderer_state.mutex.lock();
-    defer self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
+    defer self.renderer_state.mutex.unlock(stdIo());
     self.processOutputLocked(buf);
 }
 
@@ -657,19 +671,16 @@ fn processOutputLocked(self: *Termio, buf: []const u8) void {
     // non-blink state so it is rendered if visible. If we're under
     // HEAVY read load, we don't want to send a ton of these so we
     // use a timer under the covers
-    if (std.time.Instant.now()) |now| cursor_reset: {
+    const now = nowTimestamp();
+    cursor_reset: {
         if (self.last_cursor_reset) |last| {
-            if (now.since(last) <= (500 * std.time.ns_per_ms)) {
-                break :cursor_reset;
-            }
+            if (durationSince(last, now) <= (500 * std.time.ns_per_ms)) break :cursor_reset;
         }
 
         self.last_cursor_reset = now;
         _ = self.renderer_mailbox.push(.{
             .reset_cursor_blink = {},
         }, .{ .instant = {} });
-    } else |err| {
-        log.warn("failed to get current time err={}", .{err});
     }
 
     // If we have an inspector, we enter SLOW MODE because we need to
@@ -702,8 +713,8 @@ fn processOutputLocked(self: *Termio, buf: []const u8) void {
 
 /// Sends a DSR response for the current color scheme to the pty.
 pub fn colorSchemeReport(self: *Termio, td: *ThreadData, force: bool) !void {
-    self.renderer_state.mutex.lock();
-    defer self.renderer_state.mutex.unlock();
+    self.renderer_state.mutex.lockUncancelable(stdIo());
+    defer self.renderer_state.mutex.unlock(stdIo());
 
     try self.colorSchemeReportLocked(td, force);
 }

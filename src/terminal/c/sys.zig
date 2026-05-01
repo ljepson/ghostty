@@ -233,7 +233,7 @@ pub fn logStderr(
     var buffer: [64]u8 = undefined;
     const stderr = std.debug.lockStderr(&buffer);
     defer std.debug.unlockStderr();
-    const writer = stderr.file_writer.interface;
+    var writer = stderr.file_writer.interface;
     nosuspend {
         if (scope.len > 0) {
             writer.print("[{s}]({s}): {s}\n", .{ level_text, scope, message }) catch {};

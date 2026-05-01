@@ -27,10 +27,12 @@ pub fn legacyDefaultXdgPath(alloc: Allocator) ![]const u8 {
 /// Preferred default path for the XDG home configuration file.
 /// Returned value must be freed by the caller.
 pub fn preferredXdgPath(alloc: Allocator) ![]const u8 {
+    const io = std.Io.Threaded.global_single_threaded.io();
+
     // If the XDG path exists, use that.
     const xdg_path = try defaultXdgPath(alloc);
     if (open(xdg_path)) |f| {
-        f.close();
+        f.close(io);
         return xdg_path;
     } else |_| {}
 
@@ -38,7 +40,7 @@ pub fn preferredXdgPath(alloc: Allocator) ![]const u8 {
     errdefer alloc.free(xdg_path);
     const legacy_xdg_path = try legacyDefaultXdgPath(alloc);
     if (open(legacy_xdg_path)) |f| {
-        f.close();
+        f.close(io);
         alloc.free(xdg_path);
         return legacy_xdg_path;
     } else |_| {}
@@ -64,10 +66,12 @@ pub fn legacyDefaultAppSupportPath(alloc: Allocator) ![]const u8 {
 /// Preferred default path for the macOS Application Support configuration file.
 /// Returned value must be freed by the caller.
 pub fn preferredAppSupportPath(alloc: Allocator) ![]const u8 {
+    const io = std.Io.Threaded.global_single_threaded.io();
+
     // If the app support path exists, use that.
     const app_support_path = try defaultAppSupportPath(alloc);
     if (open(app_support_path)) |f| {
-        f.close();
+        f.close(io);
         return app_support_path;
     } else |_| {}
 
@@ -75,7 +79,7 @@ pub fn preferredAppSupportPath(alloc: Allocator) ![]const u8 {
     errdefer alloc.free(app_support_path);
     const legacy_app_support_path = try legacyDefaultAppSupportPath(alloc);
     if (open(legacy_app_support_path)) |f| {
-        f.close();
+        f.close(io);
         alloc.free(app_support_path);
         return legacy_app_support_path;
     } else |_| {}
@@ -94,6 +98,8 @@ pub fn preferredAppSupportPath(alloc: Allocator) ![]const u8 {
 ///
 /// The returned value must be freed by the caller.
 pub fn preferredDefaultFilePath(alloc: Allocator) ![]const u8 {
+    const io = std.Io.Threaded.global_single_threaded.io();
+
     switch (builtin.os.tag) {
         .macos => {
             // macOS prefers the Application Support directory
@@ -107,11 +113,11 @@ pub fn preferredDefaultFilePath(alloc: Allocator) ![]const u8 {
                     alloc.free(xdg_path);
                     return app_support_path;
                 };
-                xdg_file.close();
+                xdg_file.close(io);
                 alloc.free(app_support_path);
                 return xdg_path;
             };
-            app_support_file.close();
+            app_support_file.close(io);
             return app_support_path;
         },
 
@@ -130,10 +136,12 @@ const OpenFileError = error{
 /// Opens the file at the given path and returns the file handle
 /// if it exists and is non-empty. This also constrains the possible
 /// errors to a smaller set that we can explicitly handle.
-pub fn open(path: []const u8) OpenFileError!std.fs.File {
+pub fn open(path: []const u8) OpenFileError!std.Io.File {
     assert(std.fs.path.isAbsolute(path));
 
-    var file = std.fs.openFileAbsolute(
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var file = std.Io.Dir.openFileAbsolute(
+        io,
         path,
         .{},
     ) catch |err| switch (err) {
@@ -146,9 +154,9 @@ pub fn open(path: []const u8) OpenFileError!std.fs.File {
             return OpenFileError.FileOpenFailed;
         },
     };
-    errdefer file.close();
+    errdefer file.close(io);
 
-    const stat = file.stat() catch |err| {
+    const stat = file.stat(io) catch |err| {
         log.warn("error getting file stat path={s} err={}", .{
             path,
             err,

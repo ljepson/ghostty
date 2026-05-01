@@ -232,8 +232,8 @@ fn modsTooltip(
     mods: *const input.Mods,
     buf: []u8,
 ) ![:0]const u8 {
-    var stream = std.io.fixedBufferStream(buf);
-    const writer = stream.writer();
+    if (buf.len == 0) return error.WriteFailed;
+    var writer: std.Io.Writer = .fixed(buf[0 .. buf.len - 1]);
     var first = true;
     if (mods.shift) {
         try writer.writeAll("Shift");
@@ -253,9 +253,9 @@ fn modsTooltip(
         if (!first) try writer.writeAll("+");
         try writer.writeAll("Super");
     }
-    try writer.writeByte(0);
-    const written = stream.getWritten();
-    return written[0 .. written.len - 1 :0];
+    const written = writer.buffered();
+    buf[written.len] = 0;
+    return buf[0..written.len :0];
 }
 
 /// Keyboard event stream inspector widget.
@@ -403,8 +403,7 @@ pub const Stream = struct {
                 cimgui.c.ImGui_TextDisabled("-");
             } else {
                 var utf8_buf: [128]u8 = undefined;
-                var utf8_stream = std.io.fixedBufferStream(&utf8_buf);
-                const utf8_writer = utf8_stream.writer();
+                var utf8_writer: std.Io.Writer = .fixed(&utf8_buf);
                 if (std.unicode.Utf8View.init(ev.event.utf8)) |view| {
                     var utf8_it = view.iterator();
                     while (utf8_it.nextCodepoint()) |cp| {
@@ -423,8 +422,7 @@ pub const Stream = struct {
                 cimgui.c.ImGui_TextDisabled("-");
             } else {
                 var pty_buf: [256]u8 = undefined;
-                var pty_stream = std.io.fixedBufferStream(&pty_buf);
-                const pty_writer = pty_stream.writer();
+                var pty_writer: std.Io.Writer = .fixed(&pty_buf);
                 for (ev.pty) |byte| {
                     if (byte == 0x1B) {
                         pty_writer.writeAll("ESC ") catch break;
@@ -444,8 +442,7 @@ pub const Stream = struct {
                 cimgui.c.ImGui_TextDisabled("-");
             } else {
                 var binding_buf: [256]u8 = undefined;
-                var binding_stream = std.io.fixedBufferStream(&binding_buf);
-                const binding_writer = binding_stream.writer();
+                var binding_writer: std.Io.Writer = .fixed(&binding_buf);
                 for (ev.binding, 0..) |action, i| {
                     if (i > 0) binding_writer.writeAll(", ") catch break;
                     binding_writer.writeAll(@tagName(action)) catch break;

@@ -1,6 +1,30 @@
 const std = @import("std");
 const config = @import("config.zig");
 
+pub fn reifyType(comptime info: std.builtin.Type) type {
+    return switch (info) {
+        .@"enum" => |e| reifyEnum(e),
+        else => @compileError("unsupported type info: " ++ @tagName(info)),
+    };
+}
+
+fn reifyEnum(comptime info: std.builtin.Type.Enum) type {
+    comptime var field_names: [info.fields.len][]const u8 = undefined;
+    comptime var field_values: [info.fields.len]info.tag_type = undefined;
+
+    for (info.fields, 0..) |field, i| {
+        field_names[i] = field.name;
+        field_values[i] = @intCast(field.value);
+    }
+
+    return @Enum(
+        info.tag_type,
+        if (info.is_exhaustive) .exhaustive else .nonexhaustive,
+        &field_names,
+        &field_values,
+    );
+}
+
 const Allocator = std.mem.Allocator;
 
 pub const GeneralCategory = enum(u5) {

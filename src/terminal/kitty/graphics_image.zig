@@ -18,6 +18,15 @@ const temp_dir = struct {
 
 const log = std.log.scoped(.kitty_gfx);
 
+fn realPath(path: []const u8, buf: *[std.fs.max_path_bytes]u8) ![]u8 {
+    const n = try std.Io.Dir.cwd().realPathFile(
+        std.Io.Threaded.global_single_threaded.io(),
+        path,
+        buf,
+    );
+    return buf[0..n];
+}
+
 /// Maximum width or height of an image. Taken directly from Kitty.
 const max_dimension = 10000;
 
@@ -34,7 +43,7 @@ pub const LoadingImage = struct {
     image: Image,
 
     /// The data that is being built up.
-    data: std.ArrayListUnmanaged(u8) = .{},
+    data: std.ArrayListUnmanaged(u8) = .empty,
 
     /// This is non-null when a transmit and display command is given
     /// so that we display the image after it is fully loaded.
@@ -134,7 +143,7 @@ pub const LoadingImage = struct {
         var abs_buf: [std.fs.max_path_bytes]u8 = undefined;
         const path = switch (t.medium) {
             .direct => unreachable, // handled above
-            .file, .temporary_file => posix.realpath(cmd.data, &abs_buf) catch |err| {
+            .file, .temporary_file => realPath(cmd.data, &abs_buf) catch |err| {
                 log.warn("failed to get absolute path: {}", .{err});
                 return error.InvalidData;
             },
@@ -277,20 +286,21 @@ pub const LoadingImage = struct {
                 return error.TemporaryFileNotNamedCorrectly;
             }
         }
+        const io = std.Io.Threaded.global_single_threaded.io();
         defer if (medium == .temporary_file) {
-            posix.unlink(path) catch |err| {
+            std.Io.Dir.cwd().deleteFile(io, path) catch |err| {
                 log.warn("failed to delete temporary file: {}", .{err});
             };
         };
 
-        var file = std.fs.cwd().openFile(path, .{}) catch |err| {
+        var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| {
             log.warn("failed to open temporary file: {}", .{err});
             return error.InvalidData;
         };
-        defer file.close();
+        defer file.close(io);
 
         // File must be a regular file
-        if (file.stat()) |stat| {
+        if (file.stat(io)) |stat| {
             if (stat.kind != .file) {
                 log.warn("file is not a regular file kind={}", .{stat.kind});
                 return error.InvalidData;
@@ -300,15 +310,16 @@ pub const LoadingImage = struct {
             return error.InvalidData;
         }
 
+        var buf: [4096]u8 = undefined;
+        var buf_reader = file.reader(io, &buf);
+
         if (t.offset > 0) {
-            file.seekTo(@intCast(t.offset)) catch |err| {
+            buf_reader.seekTo(@intCast(t.offset)) catch |err| {
                 log.warn("failed to seek to offset {}: {}", .{ t.offset, err });
                 return error.InvalidData;
             };
         }
 
-        var buf: [4096]u8 = undefined;
-        var buf_reader = file.reader(&buf);
         const reader = &buf_reader.interface;
 
         // Read the file
@@ -337,7 +348,7 @@ pub const LoadingImage = struct {
         // The temporary dir is sometimes a symlink. On macOS for
         // example /tmp is /private/var/...
         var buf: [std.fs.max_path_bytes]u8 = undefined;
-        if (posix.realpath(dir, &buf)) |real_dir| {
+        if (realPath(dir, &buf)) |real_dir| {
             if (std.mem.startsWith(u8, path, real_dir)) return true;
         } else |_| {}
 
@@ -489,7 +500,7 @@ pub const LoadingImage = struct {
 
         // Replace our data
         self.data.deinit(alloc);
-        self.data = .{};
+        self.data = .empty;
         try self.data.ensureUnusedCapacity(alloc, result.data.len);
         try self.data.appendSlice(alloc, result.data[0..result.data.len]);
 

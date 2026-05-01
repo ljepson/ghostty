@@ -111,8 +111,9 @@ pub const Action = enum {
                     // for all commands by just changing this one place.
 
                     if (std.mem.eql(u8, field.name, @tagName(self))) {
+                        const io = std.Io.Threaded.global_single_threaded.io();
                         var buffer: [1024]u8 = undefined;
-                        var stdout_writer = std.fs.File.stdout().writer(&buffer);
+                        var stdout_writer = std.Io.File.stdout().writerStreaming(io, &buffer);
                         const stdout = &stdout_writer.interface;
                         const text = @field(help_strings.Action, field.name) ++ "\n";
                         stdout.writeAll(text) catch |write_err| {

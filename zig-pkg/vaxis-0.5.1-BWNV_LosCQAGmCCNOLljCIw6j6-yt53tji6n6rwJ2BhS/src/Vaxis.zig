@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const atomic = std.atomic;
 const base64Encoder = std.base64.standard.Encoder;
 const zigimg = @import("zigimg");
-const IoWriter = std.io.Writer;
+const IoWriter = std.Io.Writer;
 
 const Cell = @import("Cell.zig");
 const Image = @import("Image.zig");
@@ -24,6 +24,11 @@ const ctlseqs = @import("ctlseqs.zig");
 const gwidth = @import("gwidth.zig");
 
 const assert = std.debug.assert;
+
+fn getenv(name: [*:0]const u8) ?[]const u8 {
+    if (!builtin.link_libc) return null;
+    return if (std.c.getenv(name)) |value| std.mem.span(value) else null;
+}
 
 const Vaxis = @This();
 
@@ -250,7 +255,16 @@ pub fn exitAltScreen(self: *Vaxis, tty: *IoWriter) !void {
 pub fn queryTerminal(self: *Vaxis, tty: *IoWriter, timeout_ns: u64) !void {
     try self.queryTerminalSend(tty);
     // 1 second timeout
-    std.Thread.Futex.timedWait(&self.query_futex, 0, timeout_ns) catch {};
+    const io = std.Io.Threaded.global_single_threaded.io();
+    io.futexWaitTimeout(
+        u32,
+        &self.query_futex.raw,
+        0,
+        .{ .duration = .{
+            .raw = std.Io.Duration.fromNanoseconds(@intCast(timeout_ns)),
+            .clock = .awake,
+        } },
+    ) catch {};
     self.queries_done.store(true, .unordered);
     try self.enableDetectedFeatures(tty);
 }
@@ -317,22 +331,22 @@ pub fn enableDetectedFeatures(self: *Vaxis, tty: *IoWriter) !void {
         },
         else => {
             // Apply any environment variables
-            if (std.posix.getenv("TERMUX_VERSION")) |_|
+            if (getenv("TERMUX_VERSION")) |_|
                 self.sgr = .legacy;
-            if (std.posix.getenv("VHS_RECORD")) |_| {
+            if (getenv("VHS_RECORD")) |_| {
                 self.caps.unicode = .wcwidth;
                 self.caps.kitty_keyboard = false;
                 self.sgr = .legacy;
             }
-            if (std.posix.getenv("TERM_PROGRAM")) |prg| {
+            if (getenv("TERM_PROGRAM")) |prg| {
                 if (std.mem.eql(u8, prg, "vscode"))
                     self.sgr = .legacy;
             }
-            if (std.posix.getenv("VAXIS_FORCE_LEGACY_SGR")) |_|
+            if (getenv("VAXIS_FORCE_LEGACY_SGR")) |_|
                 self.sgr = .legacy;
-            if (std.posix.getenv("VAXIS_FORCE_WCWIDTH")) |_|
+            if (getenv("VAXIS_FORCE_WCWIDTH")) |_|
                 self.caps.unicode = .wcwidth;
-            if (std.posix.getenv("VAXIS_FORCE_UNICODE")) |_|
+            if (getenv("VAXIS_FORCE_UNICODE")) |_|
                 self.caps.unicode = .unicode;
 
             // enable detected features

@@ -36,7 +36,7 @@ pub const Shaper = struct {
     /// The codepoints added to the buffer before shaping. We need to keep
     /// these separately because after shaping, HarfBuzz replaces codepoints
     /// with glyph indices in the buffer.
-    codepoints: std.ArrayListUnmanaged(Codepoint) = .{},
+    codepoints: std.ArrayListUnmanaged(Codepoint) = .empty,
 
     const Codepoint = struct {
         cluster: u32,
@@ -87,7 +87,7 @@ pub const Shaper = struct {
         return Shaper{
             .alloc = alloc,
             .hb_buf = try harfbuzz.Buffer.create(),
-            .cell_buf = .{},
+            .cell_buf = .empty,
             .hb_feats = hb_feats,
         };
     }
@@ -134,8 +134,9 @@ pub const Shaper = struct {
             // We have to lock the grid to get the face and unfortunately
             // freetype faces (typically used with harfbuzz) are not thread
             // safe so this has to be an exclusive lock.
-            run.grid.lock.lock();
-            defer run.grid.lock.unlock();
+            const io = std.Io.Threaded.global_single_threaded.io();
+            run.grid.lock.lockUncancelable(io);
+            defer run.grid.lock.unlock(io);
 
             const face = try run.grid.resolver.collection.getFace(run.font_index);
             const i = if (!face.quirks_disable_default_font_features) 0 else i: {

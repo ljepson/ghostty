@@ -48,11 +48,9 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
     // Note: we ALWAYS want to allocate here because the result is always
     // freed, do not try to use internal_os.getenv or posix getenv.
     if (comptime builtin.mode != .Debug) {
-        if (std.process.getEnvVarOwned(alloc, "GHOSTTY_RESOURCES_DIR")) |dir| {
+        if (try getEnvVarOwned(alloc, "GHOSTTY_RESOURCES_DIR")) |dir| {
             if (dir.len > 0) return .{ .app_path = dir };
-        } else |err| switch (err) {
-            error.EnvironmentVariableNotFound => {},
-            else => return err,
+            alloc.free(dir);
         }
     }
 
@@ -67,7 +65,11 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
 
     // Get the path to our running binary
     var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
-    var exe: []const u8 = std.fs.selfExePath(&exe_buf) catch return .{};
+    const exe_len = std.process.executablePath(
+        std.Io.Threaded.global_single_threaded.io(),
+        &exe_buf,
+    ) catch return .{};
+    var exe: []const u8 = exe_buf[0..exe_len];
 
     // We have an exe path! Climb the tree looking for the terminfo
     // bundle as we expect it.
@@ -102,15 +104,20 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
     // If terminfo detection failed in debug builds (somehow),
     // fallback and use the provided resources dir.
     if (comptime builtin.mode == .Debug) {
-        if (std.process.getEnvVarOwned(alloc, "GHOSTTY_RESOURCES_DIR")) |dir| {
+        if (try getEnvVarOwned(alloc, "GHOSTTY_RESOURCES_DIR")) |dir| {
             if (dir.len > 0) return .{ .app_path = dir };
-        } else |err| switch (err) {
-            error.EnvironmentVariableNotFound => {},
-            else => return err,
+            alloc.free(dir);
         }
     }
 
     return .{};
+}
+
+fn getEnvVarOwned(alloc: Allocator, key: [:0]const u8) !?[]u8 {
+    if (!builtin.link_libc) return null;
+
+    const value = std.c.getenv(key.ptr) orelse return null;
+    return try alloc.dupe(u8, std.mem.span(value));
 }
 
 /// Little helper to check if the "base/sub/suffix" directory exists and
@@ -127,7 +134,11 @@ pub fn maybeDir(
 ) !?[]const u8 {
     const path = try std.fmt.bufPrint(buf, "{s}/{s}/{s}", .{ base, sub, suffix });
 
-    if (std.fs.accessAbsolute(path, .{})) {
+    if (std.Io.Dir.accessAbsolute(
+        std.Io.Threaded.global_single_threaded.io(),
+        path,
+        .{},
+    )) {
         const len = path.len - suffix.len - 1;
         return buf[0..len];
     } else |_| {

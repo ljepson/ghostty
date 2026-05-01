@@ -526,7 +526,7 @@ pub const ImageStorage = struct {
         // bit is fine compared to the megabytes we're looking to save.
         const Candidate = struct {
             id: u32,
-            time: std.time.Instant,
+            time: std.Io.Timestamp,
             used: bool,
         };
 
@@ -573,7 +573,10 @@ pub const ImageStorage = struct {
                     _ = ctx;
 
                     // If they're usage matches, then its based on time.
-                    if (lhs.used == rhs.used) return switch (lhs.time.order(rhs.time)) {
+                    if (lhs.used == rhs.used) return switch (std.math.order(
+                        lhs.time.nanoseconds,
+                        rhs.time.nanoseconds,
+                    )) {
                         .lt => true,
                         .gt => false,
                         .eq => lhs.id < rhs.id,

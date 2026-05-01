@@ -214,7 +214,11 @@ pub fn handleEventGeneric(self: anytype, vx: *Vaxis, cache: *GraphemeCache, Even
                     }
                 },
                 .cap_da1 => {
-                    std.Thread.Futex.wake(&vx.query_futex, 10);
+                    std.Io.Threaded.global_single_threaded.io().futexWake(
+                        u32,
+                        &vx.query_futex.raw,
+                        10,
+                    );
                     vx.queries_done.store(true, .unordered);
                 },
                 .mouse => |mouse| {
@@ -359,7 +363,11 @@ pub fn handleEventGeneric(self: anytype, vx: *Vaxis, cache: *GraphemeCache, Even
                     vx.caps.multi_cursor = true;
                 },
                 .cap_da1 => {
-                    std.Thread.Futex.wake(&vx.query_futex, 10);
+                    std.Io.Threaded.global_single_threaded.io().futexWake(
+                        u32,
+                        &vx.query_futex.raw,
+                        10,
+                    );
                     vx.queries_done.store(true, .unordered);
                 },
                 .winsize => |winsize| {

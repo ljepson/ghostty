@@ -195,17 +195,18 @@ pub const Path = union(enum) {
             return;
         }
 
-        var dir = try std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, base, .{});
-        defer dir.close();
+        const io = std.Io.Threaded.global_single_threaded.io();
+        var dir = try std.Io.Dir.cwd().openDir(io, base, .{});
+        defer dir.close(io);
 
-        const abs = dir.realpath(path, &buf) catch |err| abs: {
+        const abs_len = dir.realPathFile(io, path, &buf) catch |err| abs: {
             if (err == error.FileNotFound) {
                 // The file doesn't exist. Try to resolve the relative path
                 // another way.
                 const resolved = try std.fs.path.resolve(arena_alloc, &.{ base, path });
                 defer arena_alloc.free(resolved);
                 @memcpy(buf[0..resolved.len], resolved);
-                break :abs buf[0..resolved.len];
+                break :abs resolved.len;
             }
 
             try diags.append(arena_alloc, .{
@@ -222,6 +223,7 @@ pub const Path = union(enum) {
 
             return;
         };
+        const abs = buf[0..abs_len];
 
         log.debug(
             "expanding file path relative={s} abs={s}",

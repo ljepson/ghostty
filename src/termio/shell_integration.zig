@@ -2,12 +2,16 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
-const EnvMap = std.process.EnvMap;
+const EnvMap = std.process.Environ.Map;
 const config = @import("../config.zig");
 const homedir = @import("../os/homedir.zig");
 const internal_os = @import("../os/main.zig");
 
 const log = std.log.scoped(.shell_integration);
+
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
 
 /// Shell types we support
 pub const Shell = enum {
@@ -373,12 +377,13 @@ fn setupBash(
         "{s}/shell-integration/bash/ghostty.bash",
         .{resource_dir},
     );
-    if (std.fs.openFileAbsolute(script_path, .{})) |file| {
-        file.close();
+    const io = stdIo();
+    if (std.Io.Dir.openFileAbsolute(io, script_path, .{})) |file| {
+        file.close(io);
         try env.put("ENV", script_path);
     } else |err| {
         log.warn("unable to open {s}: {}", .{ script_path, err });
-        env.remove("GHOSTTY_BASH_ENV");
+        _ = env.swapRemove("GHOSTTY_BASH_ENV");
         return null;
     }
 
@@ -633,11 +638,12 @@ fn setupXdgDataDirs(
         "{s}/shell-integration",
         .{resource_dir},
     );
-    var integ_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, integ_path, .{}) catch |err| {
+    const io = stdIo();
+    var integ_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), io, integ_path, .{}) catch |err| {
         log.warn("unable to open {s}: {}", .{ integ_path, err });
         return false;
     };
-    integ_dir.close();
+    integ_dir.close(io);
 
     // Set an env var so we can remove this from XDG_DATA_DIRS later.
     // This happens in the shell integration config itself. We do this
@@ -910,11 +916,12 @@ fn setupZsh(
         "{s}/shell-integration/zsh",
         .{resource_dir},
     );
-    var integ_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing, integ_path, .{}) catch |err| {
+    const io = stdIo();
+    var integ_dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), io, integ_path, .{}) catch |err| {
         log.warn("unable to open {s}: {}", .{ integ_path, err });
         return null;
     };
-    integ_dir.close();
+    integ_dir.close(io);
     try env.put("ZDOTDIR", integ_path);
 
     return try command.clone(alloc);

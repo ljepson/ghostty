@@ -184,6 +184,7 @@ pub fn main(minimal: std.process.Init.Minimal) !void {
     std.log.debug("Writing to file: {s}", .{output_path});
 
     const fd: std.posix.fd_t = try std.posix.openat(std.posix.AT.FDCWD, output_path, .{ .ACCMODE = .RDWR, .CREAT = true }, 0o666);
+    output_fd = fd;
     defer _ = std.os.linux.close(fd);
 
     try writeAll(
@@ -1203,7 +1204,7 @@ pub fn writeTableData(
             if (config.is_updating_ucd) {
                 const min_config = t.minBitsConfig(r);
                 if (!config.default.field(f.name).runtime().eql(min_config)) {
-                    try std.io.getStdout().writer().print(
+                    std.debug.print(
                         \\
                         \\Update default config in `config.zig` with the correct field config:
                         \\

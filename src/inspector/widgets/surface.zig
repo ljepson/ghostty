@@ -18,6 +18,10 @@ const window_surface = "Surface";
 const window_termio = "Terminal IO";
 const window_renderer = "Renderer";
 
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 pub const Inspector = struct {
     /// Internal GUI state
     surface_info: Info,
@@ -56,8 +60,8 @@ pub const Inspector = struct {
 
         // Draw everything that requires the terminal state mutex.
         {
-            surface.renderer_state.mutex.lock();
-            defer surface.renderer_state.mutex.unlock();
+            surface.renderer_state.mutex.lockUncancelable(stdIo());
+            defer surface.renderer_state.mutex.unlock(stdIo());
             const t = surface.renderer_state.terminal;
 
             // Terminal info window
@@ -441,8 +445,7 @@ fn mouseTable(
             for (surface_mouse.click_state, 0..) |state, i| {
                 if (state != .press) continue;
                 const button: input.MouseButton = @enumFromInt(i);
-                cimgui.c.ImGui_SameLine();
-                cimgui.c.ImGui_Text("%s", (switch (button) {
+                const label: []const u8 = switch (button) {
                     .unknown => "?",
                     .left => "L",
                     .middle => "M",
@@ -455,7 +458,9 @@ fn mouseTable(
                     .nine => "{9}",
                     .ten => "{10}",
                     .eleven => "{11}",
-                }).ptr);
+                };
+                cimgui.c.ImGui_SameLine();
+                cimgui.c.ImGui_Text("%s", label.ptr);
             }
         }
     }

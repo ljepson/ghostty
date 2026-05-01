@@ -26,7 +26,7 @@ pub var state: GlobalState = undefined;
 /// be one of these at any given moment. This is extracted into a dedicated
 /// struct because it is reused by main and the static C lib.
 pub const GlobalState = struct {
-    const GPA = std.heap.GeneralPurposeAllocator(.{});
+    const GPA = std.heap.DebugAllocator(.{});
 
     gpa: ?GPA,
     alloc: std.mem.Allocator,
@@ -49,7 +49,7 @@ pub const GlobalState = struct {
     };
 
     /// Initialize the global state.
-    pub fn init(self: *GlobalState) !void {
+    pub fn init(self: *GlobalState, args: ?std.process.Args) !void {
         // const start = try std.time.Instant.now();
         // const start_micro = std.time.microTimestamp();
         // defer {
@@ -96,10 +96,14 @@ pub const GlobalState = struct {
             unreachable;
 
         // We first try to parse any action that we may be executing.
-        self.action = try cli.action.detectArgs(
-            cli.ghostty.Action,
-            self.alloc,
-        );
+        self.action = if (args) |process_args|
+            try cli.action.detectProcessArgs(
+                cli.ghostty.Action,
+                self.alloc,
+                process_args,
+            )
+        else
+            null;
 
         // If we have an action executing, we disable logging by default
         // since we write to stderr we don't want logs messing up our

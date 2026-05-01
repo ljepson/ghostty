@@ -143,9 +143,9 @@ pub fn main(init: std.process.Init) !void {
         );
     }
 
-    const io = std.Io.failing;
+    const io = std.Io.Threaded.global_single_threaded.io();
     var buf: [4096]u8 = undefined;
-    var stdout = std.Io.File.stdout().writer(io, &buf);
+    var stdout = std.Io.File.stdout().writerStreaming(io, &buf);
     try stdout.interface.writeAll(
         \\<?xml version="1.0" encoding="UTF-8"?>
         \\<gresources>
@@ -160,6 +160,7 @@ pub fn main(init: std.process.Init) !void {
         \\</gresources>
         \\
     );
+    try stdout.interface.flush();
 }
 
 /// Generate the icon resources. This works by looking up all the icons

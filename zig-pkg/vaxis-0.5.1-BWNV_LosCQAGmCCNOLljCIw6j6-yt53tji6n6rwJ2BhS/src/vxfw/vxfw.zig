@@ -62,9 +62,9 @@ pub const Tick = struct {
     }
 
     pub fn in(ms: u32, widget: Widget) Command {
-        const now = std.time.milliTimestamp();
+        const now = std.Io.Clock.real.now(std.Io.Threaded.global_single_threaded.io()).toMilliseconds();
         return .{ .tick = .{
-            .deadline_ms = now + ms,
+            .deadline_ms = now + @as(i64, @intCast(ms)),
             .widget = widget,
         } };
     }

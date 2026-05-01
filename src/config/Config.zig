@@ -3899,16 +3899,16 @@ pub fn loadFile(self: *Config, alloc: Allocator, path: []const u8) !void {
 
         else => return err,
     };
-    defer file.close();
+    defer file.close(std.Io.Threaded.global_single_threaded.io());
 
     try self.loadFsFile(alloc, &file, path);
 }
 
 /// Load config from the given File.
-fn loadFsFile(self: *Config, alloc: Allocator, file: *std.fs.File, path: []const u8) !void {
+fn loadFsFile(self: *Config, alloc: Allocator, file: *std.Io.File, path: []const u8) !void {
     std.log.info("reading configuration file path={s}", .{path});
     var buf: [2048]u8 = undefined;
-    var file_reader = file.reader(&buf);
+    var file_reader = file.reader(std.Io.Threaded.global_single_threaded.io(), &buf);
     const reader = &file_reader.interface;
     try self.loadReader(alloc, reader, path);
 }
@@ -4000,13 +4000,14 @@ pub fn loadOptionalFile(
 
 fn writeConfigTemplate(path: []const u8) !void {
     log.info("creating template config file: path={s}", .{path});
+    const io = std.Io.Threaded.global_single_threaded.io();
     if (std.fs.path.dirname(path)) |dir_path| {
-        try std.fs.cwd().makePath(dir_path);
+        try std.Io.Dir.cwd().createDirPath(io, dir_path);
     }
-    const file = try std.fs.createFileAbsolute(path, .{});
-    defer std.fs.File.close(file, std.Io.Threaded.global_single_threaded.io());
+    const file = try std.Io.Dir.createFileAbsolute(io, path, .{});
+    defer std.Io.File.close(file, io);
     var buf: [4096]u8 = undefined;
-    var file_writer = std.Io.File.writer(file, std.Io.Threaded.global_single_threaded.io(), &buf);
+    var file_writer = std.Io.File.writer(file, io, &buf);
     const writer = &file_writer.interface;
     try writer.print(
         @embedFile("./config-template"),
@@ -4096,17 +4097,6 @@ pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
 
 /// Load and parse the CLI args.
 pub fn loadCliArgs(self: *Config, alloc_gpa: Allocator) !void {
-    switch (builtin.os.tag) {
-        .windows => {},
-
-        // Fast-path if we are Linux/BSD and have no args.
-        .linux, .freebsd => if (std.os.argv.len <= 1) return,
-
-        // Everything else we have to at least try because it may
-        // not use std.os.argv.
-        else => {},
-    }
-
     // On Linux, we have a special case where if the executing
     // program is "xdg-terminal-exec" then we treat all CLI
     // args as if they are a command to execute.
@@ -4119,7 +4109,9 @@ pub fn loadCliArgs(self: *Config, alloc_gpa: Allocator) !void {
     //
     // See: https://github.com/Vladimir-csp/xdg-terminal-exec
     if ((comptime builtin.os.tag == .linux) or (comptime builtin.os.tag == .freebsd)) {
-        if (internal_os.xdg.parseTerminalExec(std.os.argv)) |args| {
+        const argv: []const [*:0]const u8 = &.{};
+        if (argv.len > 0 and internal_os.xdg.parseTerminalExec(argv) != null) {
+            const args = internal_os.xdg.parseTerminalExec(argv).?;
             const arena_alloc = self._arena.?.allocator();
 
             // First, we add an artificial "-e" so that if we
@@ -4195,7 +4187,8 @@ pub fn loadCliArgs(self: *Config, alloc_gpa: Allocator) !void {
     // Any paths referenced from the CLI are relative to the current working
     // directory.
     var buf: [std.fs.max_path_bytes]u8 = undefined;
-    try self.expandPaths(try std.fs.cwd().realpath(".", &buf));
+    const cwd_len = try std.Io.Dir.cwd().realPath(std.Io.Threaded.global_single_threaded.io(), &buf);
+    try self.expandPaths(buf[0..cwd_len]);
 }
 
 /// Load and parse the config files that were added in the "config-file" key.
@@ -4258,7 +4251,8 @@ pub fn loadRecursiveFiles(self: *Config, alloc_gpa: Allocator) !void {
             continue;
         }
 
-        var file = std.fs.openFileAbsolute(path, .{}) catch |err| {
+        const io = std.Io.Threaded.global_single_threaded.io();
+        var file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch |err| {
             if (err != error.FileNotFound or !optional) {
                 const diag: cli.Diagnostic = .{
                     .message = try std.fmt.allocPrintSentinel(
@@ -4274,9 +4268,9 @@ pub fn loadRecursiveFiles(self: *Config, alloc_gpa: Allocator) !void {
             }
             continue;
         };
-        defer file.close();
+        defer file.close(io);
 
-        const stat = try file.stat();
+        const stat = try file.stat(io);
         switch (stat.kind) {
             .file => {},
             else => |kind| {
@@ -4421,7 +4415,7 @@ fn loadTheme(self: *Config, theme: Theme) !void {
     )) orelse return;
     const path = themefile.path;
     const file = themefile.file;
-    defer file.close();
+    defer file.close(std.Io.Threaded.global_single_threaded.io());
 
     // From this point onwards, we load the theme and do a bit of a dance
     // to achieve two separate goals:
@@ -4443,7 +4437,7 @@ fn loadTheme(self: *Config, theme: Theme) !void {
 
     // Load our theme
     var buf: [2048]u8 = undefined;
-    var file_reader = file.reader(&buf);
+    var file_reader = file.reader(std.Io.Threaded.global_single_threaded.io(), &buf);
     const reader = &file_reader.interface;
     var iter: cli.args.LineIterator = .{ .r = reader, .filepath = path };
     try new_config.loadIter(alloc_gpa, &iter);
@@ -4580,7 +4574,9 @@ pub fn finalize(self: *Config) !void {
                 // read from SHELL if we're in a probable CLI environment.
                 if (!probable_cli) break :shell_env;
 
-                if (std.process.getEnvVarOwned(alloc, "SHELL")) |value| {
+                if (try internal_os.getenv(alloc, "SHELL")) |env_value| {
+                    defer env_value.deinit(alloc);
+                    const value = env_value.value;
                     log.info("default shell source=env value={s}", .{value});
 
                     const copy = try alloc.dupeZ(u8, value);
@@ -4588,7 +4584,7 @@ pub fn finalize(self: *Config) !void {
 
                     // If we don't need the working directory, then we can exit now.
                     if (wd != .home) break :command;
-                } else |_| {}
+                }
             }
 
             switch (builtin.os.tag) {
@@ -5091,13 +5087,13 @@ fn probableCliEnvironment() bool {
 
     // If we have TERM_PROGRAM set to a non-empty value, we assume
     // a graphical terminal environment.
-    if (std.posix.getenv("TERM_PROGRAM")) |v| {
-        if (v.len > 0) return true;
+    if (comptime builtin.link_libc) {
+        if (std.c.getenv("TERM_PROGRAM")) |v| {
+            if (std.mem.span(v).len > 0) return true;
+        }
     }
 
     // CLI arguments makes things probable
-    if (std.os.argv.len > 1) return true;
-
     // Unlikely CLI environment
     return false;
 }

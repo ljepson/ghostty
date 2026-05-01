@@ -11,13 +11,18 @@ const macos = @import("macos");
 /// but handles macOS using NSProcessInfo instead of libc argc/argv.
 pub fn iterator(allocator: Allocator) ArgIterator.InitError!ArgIterator {
     //if (true) return try std.process.argsWithAllocator(allocator);
+    if (comptime builtin.os.tag != .macos) {
+        const empty_args: std.process.Args = .{ .vector = &.{} };
+        return try std.process.Args.Iterator.initAllocator(empty_args, allocator);
+    }
+
     return .initWithAllocator(allocator);
 }
 
 /// Duck-typed to std.process.ArgIterator
 pub const ArgIterator = switch (builtin.os.tag) {
     .macos => IteratorMacOS,
-    else => std.process.ArgIterator,
+    else => std.process.Args.Iterator,
 };
 
 /// This is an ArgIterator (duck-typed for std.process.ArgIterator) for

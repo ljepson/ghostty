@@ -34,7 +34,7 @@ pub const PosixTty = struct {
     fd: posix.fd_t,
 
     /// File.Writer for efficient buffered writing
-    tty_writer: std.fs.File.Writer,
+    tty_writer: std.Io.File.Writer,
 
     pub const SignalHandler = struct {
         context: *anyopaque,
@@ -43,7 +43,7 @@ pub const PosixTty = struct {
 
     /// global signal handlers
     var handlers: [8]SignalHandler = undefined;
-    var handler_mutex: std.Thread.Mutex = .{};
+    var handler_mutex: std.Io.Mutex = .init;
     var handler_idx: usize = 0;
 
     var handler_installed: bool = false;
@@ -52,8 +52,13 @@ pub const PosixTty = struct {
     /// signal handler is installed for SIGWINCH. No callbacks are installed, be
     /// sure to register a callback when initializing the event loop
     pub fn init(buffer: []u8) !PosixTty {
+        const io = std.Io.Threaded.global_single_threaded.io();
+
         // Open our tty
-        const fd = try posix.open("/dev/tty", .{ .ACCMODE = .RDWR }, 0);
+        const file = try std.Io.Dir.openFileAbsolute(io, "/dev/tty", .{
+            .mode = .read_write,
+        });
+        const fd = file.handle;
 
         // Set the termios of the tty
         const termios = try makeRaw(fd);
@@ -69,12 +74,10 @@ pub const PosixTty = struct {
         posix.sigaction(posix.SIG.WINCH, &act, null);
         handler_installed = true;
 
-        const file = std.fs.File{ .handle = fd };
-
         const self: PosixTty = .{
             .fd = fd,
             .termios = termios,
-            .tty_writer = .initStreaming(file, buffer),
+            .tty_writer = .initStreaming(file, io, buffer),
         };
 
         global_tty = self;
@@ -88,7 +91,14 @@ pub const PosixTty = struct {
             std.log.err("couldn't restore terminal: {}", .{err});
         };
         if (builtin.os.tag != .macos) // closing /dev/tty may block indefinitely on macos
-            posix.close(self.fd);
+        {
+            const io = std.Io.Threaded.global_single_threaded.io();
+            const file: std.Io.File = .{
+                .handle = self.fd,
+                .flags = .{ .nonblocking = false },
+            };
+            file.close(io);
+        }
     }
 
     /// Resets the signal handler to it's default
@@ -117,16 +127,18 @@ pub const PosixTty = struct {
     /// Install a signal handler for winsize. A maximum of 8 handlers may be
     /// installed
     pub fn notifyWinsize(handler: SignalHandler) !void {
-        handler_mutex.lock();
-        defer handler_mutex.unlock();
+        const io = std.Io.Threaded.global_single_threaded.io();
+        handler_mutex.lockUncancelable(io);
+        defer handler_mutex.unlock(io);
         if (handler_idx == handlers.len) return error.OutOfMemory;
         handlers[handler_idx] = handler;
         handler_idx += 1;
     }
 
-    fn handleWinch(_: c_int) callconv(.c) void {
-        handler_mutex.lock();
-        defer handler_mutex.unlock();
+    fn handleWinch(_: posix.SIG) callconv(.c) void {
+        const io = std.Io.Threaded.global_single_threaded.io();
+        handler_mutex.lockUncancelable(io);
+        defer handler_mutex.unlock(io);
         var i: usize = 0;
         while (i < handler_idx) : (i += 1) {
             const handler = handlers[i];

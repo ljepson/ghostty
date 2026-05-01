@@ -513,7 +513,7 @@ pub const SplitTree = extern struct {
         signals.changed.impl.emit(
             self,
             null,
-            .{ priv.tree, tree },
+            .{ .@"0" = priv.tree, .@"1" = tree },
             null,
         );
 

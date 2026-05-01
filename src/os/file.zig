@@ -81,8 +81,17 @@ pub fn allocTmpDir(allocator: std.mem.Allocator) std.mem.Allocator.Error![]const
         }
         return allocator.dupe(u8, "C:\\Windows\\Temp");
     }
-    const tmpdir = posix.getenv("TMPDIR") orelse posix.getenv("TMP") orelse return "/tmp";
-    return std.mem.trimEnd(u8, tmpdir, &.{std.fs.path.sep});
+    if (builtin.link_libc) {
+        const tmpdir = if (std.c.getenv("TMPDIR")) |v|
+            std.mem.span(v)
+        else if (std.c.getenv("TMP")) |v|
+            std.mem.span(v)
+        else
+            return "/tmp";
+        return std.mem.trimEnd(u8, tmpdir, &.{std.fs.path.sep});
+    }
+
+    return "/tmp";
 }
 
 /// Free a path returned by `allocTmpDir` if it allocated memory.
@@ -94,6 +103,10 @@ pub fn freeTmpDir(allocator: std.mem.Allocator, dir: []const u8) void {
 
 const random_basename_bytes = 16;
 const b64_encoder = std.base64.url_safe_no_pad.Encoder;
+
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
 
 pub const RandomBasenameError = error{BufferTooSmall};
 
@@ -107,7 +120,8 @@ pub const random_basename_len = b64_encoder.calcSize(random_basename_bytes);
 pub fn randomBasename(buf: []u8) RandomBasenameError![]const u8 {
     if (buf.len < random_basename_len) return error.BufferTooSmall;
     var rand_buf: [random_basename_bytes]u8 = undefined;
-    std.crypto.random.bytes(&rand_buf);
+    var random_source: std.Random.IoSource = .{ .io = stdIo() };
+    random_source.interface().bytes(&rand_buf);
     return b64_encoder.encode(buf[0..random_basename_len], &rand_buf);
 }
 

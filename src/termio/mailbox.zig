@@ -13,6 +13,10 @@ const log = std.log.scoped(.io_writer);
 /// but I'm open to changing it with good arguments.
 const Queue = BlockingQueue(termio.Message, 64);
 
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// The location to where write-related messages are sent.
 pub const Mailbox = union(enum) {
     // /// Write messages to an unbounded list backed by an allocator.
@@ -61,7 +65,7 @@ pub const Mailbox = union(enum) {
     pub fn send(
         self: *Mailbox,
         msg: termio.Message,
-        mutex: ?*std.Thread.Mutex,
+        mutex: ?*std.Io.Mutex,
     ) void {
         switch (self.*) {
             .spsc => |*mb| send: {
@@ -87,8 +91,8 @@ pub const Mailbox = union(enum) {
                 // are other messages in the writer queue (resize, focus) that
                 // could acquire the lock. This is why we have to release our lock
                 // here.
-                if (mutex) |m| m.unlock();
-                defer if (mutex) |m| m.lock();
+                if (mutex) |m| m.unlock(stdIo());
+                defer if (mutex) |m| m.lockUncancelable(stdIo());
                 _ = mb.queue.push(msg, .{ .forever = {} });
             },
         }

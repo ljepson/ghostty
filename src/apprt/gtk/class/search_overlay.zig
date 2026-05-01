@@ -245,7 +245,7 @@ pub const SearchOverlay = extern struct {
         const priv = self.private();
         if (!priv.active and active) {
             const text = priv.search_entry.as(gtk.Editable).getText();
-            signals.@"search-changed".impl.emit(self, null, .{text}, null);
+            signals.@"search-changed".impl.emit(self, null, .{ .@"0" = text }, null);
         }
         priv.active = active;
     }
@@ -254,7 +254,7 @@ pub const SearchOverlay = extern struct {
     pub fn setSearchContents(self: *Self, content: [:0]const u8) void {
         const priv = self.private();
         priv.search_entry.as(gtk.Editable).setText(content);
-        signals.@"search-changed".impl.emit(self, null, .{content}, null);
+        signals.@"search-changed".impl.emit(self, null, .{ .@"0" = content }, null);
     }
 
     /// Set the total number of search matches.
@@ -322,7 +322,7 @@ pub const SearchOverlay = extern struct {
 
     fn searchChanged(entry: *gtk.SearchEntry, self: *Self) callconv(.c) void {
         const text = entry.as(gtk.Editable).getText();
-        signals.@"search-changed".impl.emit(self, null, .{text}, null);
+        signals.@"search-changed".impl.emit(self, null, .{ .@"0" = text }, null);
     }
 
     // NOTE: The callbacks below use anyopaque for the first parameter

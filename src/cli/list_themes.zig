@@ -116,13 +116,14 @@ pub fn run(gpa_alloc: std.mem.Allocator) !u8 {
     var arena = std.heap.ArenaAllocator.init(gpa_alloc);
     const alloc = arena.allocator();
 
+    const io = std.Io.Threaded.global_single_threaded.io();
     var stdout_buf: [4096]u8 = undefined;
-    var stdout_file: std.fs.File = .stdout();
-    var stdout_writer = stdout_file.writer(&stdout_buf);
+    const stdout_file = std.Io.File.stdout();
+    var stdout_writer = stdout_file.writerStreaming(io, &stdout_buf);
     const stdout = &stdout_writer.interface;
 
     var stderr_buf: [4096]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buf);
+    var stderr_writer = std.Io.File.stderr().writerStreaming(io, &stderr_buf);
     const stderr = &stderr_writer.interface;
 
     const resources_dir = global_state.resources_dir.app();
@@ -137,18 +138,18 @@ pub fn run(gpa_alloc: std.mem.Allocator) !u8 {
     var it: themepkg.LocationIterator = .{ .arena_alloc = arena.allocator() };
 
     while (try it.next()) |loc| {
-        var dir = std.fs.cwd().openDir(loc.dir, .{ .iterate = true }) catch |err| switch (err) {
+        var dir = std.Io.Dir.cwd().openDir(io, loc.dir, .{ .iterate = true }) catch |err| switch (err) {
             error.FileNotFound => continue,
             else => {
                 std.debug.print("error trying to open {s}: {}\n", .{ loc.dir, err });
                 continue;
             },
         };
-        defer dir.close();
+        defer dir.close(io);
 
         var walker = dir.iterate();
 
-        while (try walker.next()) |entry| {
+        while (try walker.next(io)) |entry| {
             switch (entry.kind) {
                 .file, .sym_link => {
                     if (std.mem.eql(u8, entry.name, ".DS_Store"))
@@ -174,7 +175,7 @@ pub fn run(gpa_alloc: std.mem.Allocator) !u8 {
 
     std.mem.sortUnstable(ThemeListElement, themes.items, {}, ThemeListElement.lessThan);
 
-    if (tui.can_pretty_print and !opts.plain and stdout_file.isTty()) {
+    if (tui.can_pretty_print and !opts.plain and try stdout_file.isTty(io)) {
         try preview(gpa_alloc, themes.items, opts.color);
         return 0;
     }
@@ -210,14 +211,15 @@ fn writeAutoThemeFile(alloc: std.mem.Allocator, theme_name: []const u8) !void {
     defer alloc.free(auto_path);
 
     if (std.fs.path.dirname(auto_path)) |dir| {
-        try std.fs.cwd().makePath(dir);
+        try std.Io.Dir.cwd().createDirPath(std.Io.Threaded.global_single_threaded.io(), dir);
     }
 
-    const f = try std.fs.createFileAbsolute(auto_path, .{ .truncate = true });
-    defer std.fs.File.close(f, std.Io.Threaded.global_single_threaded.io());
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const f = try std.Io.Dir.createFileAbsolute(io, auto_path, .{ .truncate = true });
+    defer f.close(io);
 
     var buf: [128]u8 = undefined;
-    var w = std.Io.File.writer(f, std.Io.Threaded.global_single_threaded.io(), &buf);
+    var w = std.Io.File.writer(f, io, &buf);
     try w.interface.print("theme = {s}\n", .{theme_name});
     try w.interface.flush();
 }

@@ -37,7 +37,7 @@ pub fn init(allocator: Allocator) !App {
                 .report_events = true,
             },
         }),
-        .timers = std.ArrayList(vxfw.Tick){},
+        .timers = std.ArrayList(vxfw.Tick).empty,
         .wants_focus = null,
         .buffer = undefined,
     };
@@ -97,13 +97,13 @@ pub fn run(self: *App, widget: vxfw.Widget, opts: Options) anyerror!void {
     defer focus_handler.deinit(self.allocator);
 
     // Timestamp of our next frame
-    var next_frame_ms: u64 = @intCast(std.time.milliTimestamp());
+    var next_frame_ms: u64 = @intCast(std.Io.Clock.real.now(std.Io.Threaded.global_single_threaded.io()).toMilliseconds());
 
     // Create our event context
     var ctx: vxfw.EventContext = .{
         .alloc = self.allocator,
         .phase = .capturing,
-        .cmds = vxfw.CommandList{},
+        .cmds = vxfw.CommandList.empty,
         .consume_event = false,
         .redraw = false,
         .quit = false,
@@ -111,13 +111,17 @@ pub fn run(self: *App, widget: vxfw.Widget, opts: Options) anyerror!void {
     defer ctx.cmds.deinit(self.allocator);
 
     while (true) {
-        const now_ms: u64 = @intCast(std.time.milliTimestamp());
+        const now_ms: u64 = @intCast(std.Io.Clock.real.now(std.Io.Threaded.global_single_threaded.io()).toMilliseconds());
         if (now_ms >= next_frame_ms) {
             // Deadline exceeded. Schedule the next frame
             next_frame_ms = now_ms + tick_ms;
         } else {
             // Sleep until the deadline
-            std.Thread.sleep((next_frame_ms - now_ms) * std.time.ns_per_ms);
+            const io = std.Io.Threaded.global_single_threaded.io();
+            std.Io.Clock.Duration.sleep(.{
+                .clock = .boot,
+                .raw = .fromNanoseconds(@intCast((next_frame_ms - now_ms) * std.time.ns_per_ms)),
+            }, io) catch {};
             next_frame_ms += tick_ms;
         }
 
@@ -294,7 +298,7 @@ fn handleCommand(self: *App, cmds: *vxfw.CommandList) Allocator.Error!void {
 }
 
 fn checkTimers(self: *App, ctx: *vxfw.EventContext) anyerror!void {
-    const now_ms = std.time.milliTimestamp();
+    const now_ms = std.Io.Clock.real.now(std.Io.Threaded.global_single_threaded.io()).toMilliseconds();
 
     // timers are always sorted descending
     while (self.timers.pop()) |tick| {
@@ -340,7 +344,7 @@ const MouseHandler = struct {
         // For mouse events we store the last frame and use that for hit testing
         const last_frame = surface;
 
-        var hits = std.ArrayList(vxfw.HitResult){};
+        var hits = std.ArrayList(vxfw.HitResult).empty;
         defer hits.deinit(app.allocator);
         const sub: vxfw.SubSurface = .{
             .origin = .{ .row = 0, .col = 0 },
@@ -399,7 +403,7 @@ const MouseHandler = struct {
         const last_frame = self.last_frame;
         self.mouse = mouse;
 
-        var hits = std.ArrayList(vxfw.HitResult){};
+        var hits = std.ArrayList(vxfw.HitResult).empty;
         defer hits.deinit(app.allocator);
         const sub: vxfw.SubSurface = .{
             .origin = .{ .row = 0, .col = 0 },
@@ -514,7 +518,7 @@ const FocusHandler = struct {
         return .{
             .root = root,
             .focused_widget = root,
-            .path_to_focused = std.ArrayList(Widget){},
+            .path_to_focused = std.ArrayList(Widget).empty,
         };
     }
 

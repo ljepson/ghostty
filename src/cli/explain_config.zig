@@ -75,13 +75,15 @@ pub fn run(alloc: Allocator) !u8 {
     // respective lookup. A bare positional argument tries config
     // options first, then keybind actions as a fallback.
     const name = keybind_name orelse option_name orelse positional orelse {
-        var stderr: std.fs.File = .stderr();
         var buffer: [4096]u8 = undefined;
-        var stderr_writer = stderr.writer(&buffer);
+        var stderr_writer = std.Io.File.stderr().writerStreaming(
+            std.Io.Threaded.global_single_threaded.io(),
+            &buffer,
+        );
         try stderr_writer.interface.writeAll("Usage: ghostty +explain-config <option>\n");
         try stderr_writer.interface.writeAll("       ghostty +explain-config --option=<option>\n");
         try stderr_writer.interface.writeAll("       ghostty +explain-config --keybind=<action>\n");
-        try stderr_writer.end();
+        try stderr_writer.interface.flush();
         return 1;
     };
 

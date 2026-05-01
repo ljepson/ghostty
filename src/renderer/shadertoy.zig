@@ -8,6 +8,10 @@ const configpkg = @import("../config.zig");
 
 const log = std.log.scoped(.shadertoy);
 
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// The uniform struct used for shadertoy shaders.
 pub const Uniforms = extern struct {
     resolution: [3]f32 align(16),
@@ -87,14 +91,13 @@ pub fn loadFromFile(
     // Read it all into memory -- we don't expect shaders to be large.
     const src = src: {
         // Load the shader file
-        const cwd = std.fs.cwd();
-        const file = try cwd.openFile(path, .{});
-        defer file.close();
+        const io = stdIo();
+        var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+        defer file.close(io);
 
-        break :src try file.readToEndAlloc(
-            alloc,
-            4 * 1024 * 1024, // 4MB
-        );
+        var buf: [4096]u8 = undefined;
+        var reader = file.readerStreaming(io, &buf);
+        break :src try reader.interface.readAlloc(alloc, 4 * 1024 * 1024);
     };
 
     // Convert to full GLSL

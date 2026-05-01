@@ -9,6 +9,10 @@ hostname: []const u8,
 timestamp: i64,
 terminfo_version: []const u8,
 
+pub fn nowTimestamp() i64 {
+    return std.Io.Clock.real.now(std.Io.Threaded.global_single_threaded.io()).toSeconds();
+}
+
 pub fn parse(line: []const u8) ?Entry {
     const trimmed = std.mem.trim(u8, line, " \t\r\n");
     if (trimmed.len == 0) return null;
@@ -44,14 +48,14 @@ pub fn format(self: Entry, writer: *std.Io.Writer) FormatError!void {
 
 pub fn isExpired(self: Entry, expire_days_: ?u32) bool {
     const expire_days = expire_days_ orelse return false;
-    const now = std.time.timestamp();
+    const now = nowTimestamp();
     const age_days = @divTrunc(now -| self.timestamp, std.time.s_per_day);
     return age_days > expire_days;
 }
 
 test "cache entry expiration" {
     const testing = std.testing;
-    const now = std.time.timestamp();
+    const now = nowTimestamp();
 
     const fresh_entry: Entry = .{
         .hostname = "test.com",
@@ -73,7 +77,7 @@ test "cache entry expiration" {
 
 test "cache entry expiration exact boundary" {
     const testing = std.testing;
-    const now = std.time.timestamp();
+    const now = nowTimestamp();
 
     // Exactly at expiration boundary
     const boundary_entry: Entry = .{
@@ -87,7 +91,7 @@ test "cache entry expiration exact boundary" {
 
 test "cache entry expiration large timestamp" {
     const testing = std.testing;
-    const now = std.time.timestamp();
+    const now = nowTimestamp();
 
     const boundary_entry: Entry = .{
         .hostname = "example.com",

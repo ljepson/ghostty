@@ -100,7 +100,14 @@ pub const FieldEnum = blk: {
         }
     }
 
-    break :blk @Enum(std.math.IntFittingRange(0, fields_len - 1), .exhaustive, &fields, &std.simd.iota(std.math.IntFittingRange(0, fields_len - 1), fields_len));
+    break :blk types.reifyType(.{
+        .@"enum" = .{
+            .tag_type = std.math.IntFittingRange(0, fields_len - 1),
+            .fields = &fields,
+            .decls = &.{},
+            .is_exhaustive = true,
+        },
+    });
 };
 
 fn DataField(comptime field: []const u8) type {

@@ -49,15 +49,15 @@ pub fn run(alloc: Allocator) !u8 {
         }
     }.lessThan);
 
-    // Despite being under the posix namespace, this also works on Windows as of zig 0.13.0
-    var stdout: std.fs.File = .stdout();
-    if (tui.can_pretty_print and !opts.plain and std.posix.isatty(stdout.handle)) {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const stdout_file = std.Io.File.stdout();
+    if (tui.can_pretty_print and !opts.plain and try stdout_file.isTty(io)) {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
         return prettyPrint(arena.allocator(), keys.items);
     } else {
         var buffer: [4096]u8 = undefined;
-        var stdout_writer = stdout.writer(&buffer);
+        var stdout_writer = stdout_file.writerStreaming(io, &buffer);
         const writer = &stdout_writer.interface;
         for (keys.items) |name| {
             const rgb = x11_color.map.get(name).?;
@@ -68,6 +68,7 @@ pub fn run(alloc: Allocator) !u8 {
                 rgb.b,
             });
         }
+        try writer.flush();
     }
 
     return 0;

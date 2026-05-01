@@ -3,6 +3,10 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const internal_os = @import("../os/main.zig");
 
+fn io() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// Returns a Dir for the default directory. The Dir.path field must be
 /// freed with the given allocator.
 pub fn defaultDir(alloc: Allocator) !Dir {
@@ -20,11 +24,12 @@ pub const Dir = struct {
     /// iterator must be freed with `ReportIterator.deinit`. The iterator
     /// may have no reports.
     pub fn iterator(self: *const Dir) !ReportIterator {
-        var dir = std.Io.Dir.openDir(std.Io.Dir.cwd(), std.Io.failing,
+        var dir = std.Io.Dir.cwd().openDir(
+            io(),
             self.path,
             .{ .iterate = true },
         ) catch return .{};
-        errdefer dir.close();
+        errdefer dir.close(io());
 
         return .{
             .dir = dir,
@@ -34,11 +39,11 @@ pub const Dir = struct {
 };
 
 pub const ReportIterator = struct {
-    dir: ?std.fs.Dir = null,
-    it: std.fs.Dir.Iterator = undefined,
+    dir: ?std.Io.Dir = null,
+    it: std.Io.Dir.Iterator = undefined,
 
     pub fn deinit(self: *ReportIterator) void {
-        if (self.dir) |dir| dir.close();
+        if (self.dir) |dir| dir.close(io());
     }
 
     pub fn next(self: *ReportIterator) !?Report {
@@ -47,15 +52,15 @@ pub const ReportIterator = struct {
 
         // Get the next file entry, if any.
         const entry = entry: while (true) {
-            const entry = try self.it.next() orelse return null;
+            const entry = try self.it.next(io()) orelse return null;
             if (entry.kind != .file) continue;
             break :entry entry;
         };
 
-        const stat = try dir.statFile(entry.name);
+        const stat = try dir.statFile(io(), entry.name, .{});
         return .{
             .name = entry.name,
-            .mtime = stat.mtime,
+            .mtime = stat.mtime.toNanoseconds(),
         };
     }
 };

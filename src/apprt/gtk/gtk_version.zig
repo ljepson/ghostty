@@ -1,20 +1,16 @@
 const std = @import("std");
-
-// Until the gobject bindings are built at the same time we are building
-// Ghostty, we need to import `gtk/gtk.h` directly to ensure that the version
-// macros match the version of `gtk4` that we are building/linking against.
-const c = @cImport({
-    @cInclude("gtk/gtk.h");
-});
-
 const gtk = @import("gtk");
 
 const log = std.log.scoped(.gtk);
 
+const build_major = gtk.MAJOR_VERSION;
+const build_minor = gtk.MINOR_VERSION;
+const build_micro = gtk.MICRO_VERSION;
+
 pub const comptime_version: std.SemanticVersion = .{
-    .major = c.GTK_MAJOR_VERSION,
-    .minor = c.GTK_MINOR_VERSION,
-    .patch = c.GTK_MICRO_VERSION,
+    .major = build_major,
+    .minor = build_minor,
+    .patch = build_micro,
 };
 
 pub fn getRuntimeVersion() std.SemanticVersion {
@@ -105,17 +101,17 @@ test "atLeast" {
 
     const funs = &.{ atLeast, runtimeAtLeast };
     inline for (funs) |fun| {
-        try testing.expect(fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION));
+        try testing.expect(fun(build_major, build_minor, build_micro));
 
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION + 1));
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION + 1, c.GTK_MICRO_VERSION));
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION + 1, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION));
+        try testing.expect(!fun(build_major, build_minor, build_micro + 1));
+        try testing.expect(!fun(build_major, build_minor + 1, build_micro));
+        try testing.expect(!fun(build_major + 1, build_minor, build_micro));
 
-        try testing.expect(fun(c.GTK_MAJOR_VERSION - 1, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION));
-        try testing.expect(fun(c.GTK_MAJOR_VERSION - 1, c.GTK_MINOR_VERSION + 1, c.GTK_MICRO_VERSION));
-        try testing.expect(fun(c.GTK_MAJOR_VERSION - 1, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION + 1));
+        try testing.expect(fun(build_major - 1, build_minor, build_micro));
+        try testing.expect(fun(build_major - 1, build_minor + 1, build_micro));
+        try testing.expect(fun(build_major - 1, build_minor, build_micro + 1));
 
-        try testing.expect(fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION - 1, c.GTK_MICRO_VERSION + 1));
+        try testing.expect(fun(build_major, build_minor - 1, build_micro + 1));
     }
 }
 
@@ -125,16 +121,16 @@ test "runtimeUntil" {
     // This is an array in case we add a comptime variant.
     const funs = &.{runtimeUntil};
     inline for (funs) |fun| {
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION));
+        try testing.expect(!fun(build_major, build_minor, build_micro));
 
-        try testing.expect(fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION + 1));
-        try testing.expect(fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION + 1, c.GTK_MICRO_VERSION));
-        try testing.expect(fun(c.GTK_MAJOR_VERSION + 1, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION));
+        try testing.expect(fun(build_major, build_minor, build_micro + 1));
+        try testing.expect(fun(build_major, build_minor + 1, build_micro));
+        try testing.expect(fun(build_major + 1, build_minor, build_micro));
 
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION - 1, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION));
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION - 1, c.GTK_MINOR_VERSION + 1, c.GTK_MICRO_VERSION));
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION - 1, c.GTK_MINOR_VERSION, c.GTK_MICRO_VERSION + 1));
+        try testing.expect(!fun(build_major - 1, build_minor, build_micro));
+        try testing.expect(!fun(build_major - 1, build_minor + 1, build_micro));
+        try testing.expect(!fun(build_major - 1, build_minor, build_micro + 1));
 
-        try testing.expect(!fun(c.GTK_MAJOR_VERSION, c.GTK_MINOR_VERSION - 1, c.GTK_MICRO_VERSION + 1));
+        try testing.expect(!fun(build_major, build_minor - 1, build_micro + 1));
     }
 }

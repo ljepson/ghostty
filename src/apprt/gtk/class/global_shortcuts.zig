@@ -559,7 +559,7 @@ pub const GlobalShortcuts = extern struct {
         signals.trigger.impl.emit(
             self,
             null,
-            .{&action},
+            .{ .@"0" = &action },
             null,
         );
     }
@@ -628,6 +628,12 @@ fn generateToken(buf: *Token) [:0]const u8 {
     return std.fmt.bufPrintZ(
         buf,
         "ghostty_{x:0<7}",
-        .{std.crypto.random.int(u28)},
+        .{randomInt(u28)},
     ) catch unreachable;
+}
+
+fn randomInt(comptime T: type) T {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const source: std.Random.IoSource = .{ .io = io };
+    return source.interface().int(T);
 }

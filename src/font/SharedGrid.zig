@@ -37,6 +37,10 @@ const RenderOptions = font.face.RenderOptions;
 
 const log = std.log.scoped(.font_shared_grid);
 
+fn io() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// Cache for codepoints to font indexes in a group.
 codepoints: std.AutoHashMapUnmanaged(CodepointKey, ?Collection.Index) = .{},
 
@@ -60,7 +64,7 @@ metrics: Metrics,
 /// this directly if they need to i.e. access the atlas directly. Because
 /// callers can use this lock directly, maintainers need to be extra careful
 /// to review call sites to ensure they are using the lock correctly.
-lock: std.Thread.RwLock,
+lock: std.Io.RwLock,
 
 pub const init_tw = tripwire.module(enum {
     codepoints_capacity,
@@ -80,7 +84,7 @@ pub const init_tw = tripwire.module(enum {
 pub fn init(
     alloc: Allocator,
     resolver: CodepointResolver,
-) !SharedGrid {
+) (Allocator.Error || error{CannotLoadPrimaryFont})!SharedGrid {
     const tw = init_tw;
 
     // We need to support loading options since we use the size data
@@ -95,7 +99,7 @@ pub fn init(
         .resolver = resolver,
         .atlas_grayscale = atlas_grayscale,
         .atlas_color = atlas_color,
-        .lock = .{},
+        .lock = .init,
         .metrics = undefined, // Loaded below
     };
 
@@ -162,14 +166,14 @@ pub fn getIndex(
     // Fast path: the cache has the value. This is almost always true and
     // only requires a read lock.
     {
-        self.lock.lockShared();
-        defer self.lock.unlockShared();
+        self.lock.lockSharedUncancelable(io());
+        defer self.lock.unlockShared(io());
         if (self.codepoints.get(key)) |v| return v;
     }
 
     // Slow path: we need to search this codepoint
-    self.lock.lock();
-    defer self.lock.unlock();
+    self.lock.lockUncancelable(io());
+    defer self.lock.unlock(io());
 
     // Try to get it, if it is now in the cache another thread beat us to it.
     const gop = try self.codepoints.getOrPut(alloc, key);
@@ -201,8 +205,8 @@ pub fn hasCodepoint(
     cp: u32,
     p: ?Presentation,
 ) bool {
-    self.lock.lockShared();
-    defer self.lock.unlockShared();
+    self.lock.lockSharedUncancelable(io());
+    defer self.lock.unlockShared(io());
     return self.resolver.collection.hasCodepoint(
         idx,
         cp,
@@ -236,8 +240,8 @@ pub fn renderCodepoint(
 
     // Get the glyph for the font
     const glyph_index = glyph_index: {
-        self.lock.lockShared();
-        defer self.lock.unlockShared();
+        self.lock.lockSharedUncancelable(io());
+        defer self.lock.unlockShared(io());
         const face = try self.resolver.collection.getFace(index);
         break :glyph_index face.glyphIndex(cp) orelse return null;
     };
@@ -266,14 +270,14 @@ pub fn renderGlyph(
     // Fast path: the cache has the value. This is almost always true and
     // only requires a read lock.
     {
-        self.lock.lockShared();
-        defer self.lock.unlockShared();
+        self.lock.lockSharedUncancelable(io());
+        defer self.lock.unlockShared(io());
         if (self.glyphs.get(key)) |v| return v;
     }
 
     // Slow path: we need to search this codepoint
-    self.lock.lock();
-    defer self.lock.unlock();
+    self.lock.lockUncancelable(io());
+    defer self.lock.unlock(io());
 
     const gop = try self.glyphs.getOrPut(alloc, key);
     if (gop.found_existing) return gop.value_ptr.*;
@@ -468,8 +472,8 @@ test "renderGlyph error after cache insert rolls back cache entry" {
 
     // Get the glyph index for 'A'
     const glyph_index = glyph_index: {
-        grid.lock.lockShared();
-        defer grid.lock.unlockShared();
+        grid.lock.lockSharedUncancelable(io());
+        defer grid.lock.unlockShared(io());
         const face = try grid.resolver.collection.getFace(idx);
         break :glyph_index face.glyphIndex('A').?;
     };

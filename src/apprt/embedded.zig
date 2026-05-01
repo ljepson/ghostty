@@ -949,32 +949,32 @@ pub const Surface = struct {
         };
     }
 
-    pub fn defaultTermioEnv(self: *const Surface) !std.process.EnvMap {
+    pub fn defaultTermioEnv(self: *const Surface) !std.process.Environ.Map {
         const alloc = self.app.core_app.alloc;
         var env = try internal_os.getEnvMap(alloc);
         errdefer env.deinit();
 
         if (comptime builtin.target.os.tag.isDarwin()) {
             if (env.get("__XCODE_BUILT_PRODUCTS_DIR_PATHS") != null) {
-                env.remove("__XCODE_BUILT_PRODUCTS_DIR_PATHS");
-                env.remove("__XPC_DYLD_LIBRARY_PATH");
-                env.remove("DYLD_FRAMEWORK_PATH");
-                env.remove("DYLD_INSERT_LIBRARIES");
-                env.remove("DYLD_LIBRARY_PATH");
-                env.remove("LD_LIBRARY_PATH");
-                env.remove("SECURITYSESSIONID");
-                env.remove("XPC_SERVICE_NAME");
+                _ = env.swapRemove("__XCODE_BUILT_PRODUCTS_DIR_PATHS");
+                _ = env.swapRemove("__XPC_DYLD_LIBRARY_PATH");
+                _ = env.swapRemove("DYLD_FRAMEWORK_PATH");
+                _ = env.swapRemove("DYLD_INSERT_LIBRARIES");
+                _ = env.swapRemove("DYLD_LIBRARY_PATH");
+                _ = env.swapRemove("LD_LIBRARY_PATH");
+                _ = env.swapRemove("SECURITYSESSIONID");
+                _ = env.swapRemove("XPC_SERVICE_NAME");
             }
 
             // Remove this so that running `ghostty` within Ghostty works.
-            env.remove("GHOSTTY_MAC_LAUNCH_SOURCE");
+            _ = env.swapRemove("GHOSTTY_MAC_LAUNCH_SOURCE");
 
             // If we were launched from the desktop then we want to
             // remove the LANGUAGE env var so that we don't inherit
             // our translation settings for Ghostty. If we aren't from
             // the desktop then we didn't set our LANGUAGE var so we
             // don't need to remove it.
-            if (internal_os.launchedFromDesktop()) env.remove("LANGUAGE");
+            if (internal_os.launchedFromDesktop()) _ = env.swapRemove("LANGUAGE");
         }
 
         return env;

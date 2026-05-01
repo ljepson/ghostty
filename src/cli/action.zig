@@ -12,7 +12,17 @@ pub const DetectError = error{
 
 /// Detect the action from CLI args.
 pub fn detectArgs(comptime E: type, alloc: Allocator) !?E {
-    var iter = try std.process.argsWithAllocator(alloc);
+    const empty_args: std.process.Args = .{ .vector = &.{} };
+    return try detectProcessArgs(E, alloc, empty_args);
+}
+
+/// Detect the action from a process args vector.
+pub fn detectProcessArgs(
+    comptime E: type,
+    alloc: Allocator,
+    args: std.process.Args,
+) !?E {
+    var iter = try std.process.Args.Iterator.initAllocator(args, alloc);
     defer iter.deinit();
     return try detectIter(E, &iter);
 }

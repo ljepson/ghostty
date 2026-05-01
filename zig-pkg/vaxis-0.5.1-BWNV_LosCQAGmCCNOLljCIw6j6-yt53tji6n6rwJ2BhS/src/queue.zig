@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const atomic = std.atomic;
-const Condition = std.Thread.Condition;
+const Condition = std.Io.Condition;
 
 /// Thread safe. Fixed size. Blocking push and pop.
 pub fn Queue(
@@ -14,26 +14,27 @@ pub fn Queue(
         read_index: usize = 0,
         write_index: usize = 0,
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: std.Io.Mutex = .init,
         // blocks when the buffer is full
-        not_full: Condition = .{},
+        not_full: Condition = .init,
         // ...or empty
-        not_empty: Condition = .{},
+        not_empty: Condition = .init,
 
         const Self = @This();
 
         /// Pop an item from the queue. Blocks until an item is available.
         pub fn pop(self: *Self) T {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            const io = std.Io.Threaded.global_single_threaded.io();
+            self.mutex.lockUncancelable(io);
+            defer self.mutex.unlock(io);
             while (self.isEmptyLH()) {
-                self.not_empty.wait(&self.mutex);
+                self.not_empty.waitUncancelable(io, &self.mutex);
             }
             std.debug.assert(!self.isEmptyLH());
             if (self.isFullLH()) {
                 // If we are full, wake up a push that might be
                 // waiting here.
-                self.not_full.signal();
+                self.not_full.signal(io);
             }
 
             return self.popLH();
@@ -42,10 +43,11 @@ pub fn Queue(
         /// Push an item into the queue. Blocks until an item has been
         /// put in the queue.
         pub fn push(self: *Self, item: T) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            const io = std.Io.Threaded.global_single_threaded.io();
+            self.mutex.lockUncancelable(io);
+            defer self.mutex.unlock(io);
             while (self.isFullLH()) {
-                self.not_full.wait(&self.mutex);
+                self.not_full.waitUncancelable(io, &self.mutex);
             }
             std.debug.assert(!self.isFullLH());
             const was_empty = self.isEmptyLH();
@@ -55,7 +57,7 @@ pub fn Queue(
 
             // If we were empty, wake up a pop if it was waiting.
             if (was_empty) {
-                self.not_empty.signal();
+                self.not_empty.signal(io);
             }
         }
 
@@ -63,12 +65,13 @@ pub fn Queue(
         /// was successfully placed in the queue, false if the queue
         /// was full.
         pub fn tryPush(self: *Self, item: T) bool {
-            self.mutex.lock();
+            const io = std.Io.Threaded.global_single_threaded.io();
+            self.mutex.lockUncancelable(io);
             if (self.isFullLH()) {
-                self.mutex.unlock();
+                self.mutex.unlock(io);
                 return false;
             }
-            self.mutex.unlock();
+            self.mutex.unlock(io);
             self.push(item);
             return true;
         }
@@ -76,31 +79,33 @@ pub fn Queue(
         /// Pop an item from the queue. Returns null when no item is
         /// available.
         pub fn tryPop(self: *Self) ?T {
-            self.mutex.lock();
+            const io = std.Io.Threaded.global_single_threaded.io();
+            self.mutex.lockUncancelable(io);
             if (self.isEmptyLH()) {
-                self.mutex.unlock();
+                self.mutex.unlock(io);
                 return null;
             }
-            self.mutex.unlock();
+            self.mutex.unlock(io);
             return self.pop();
         }
 
         /// Poll the queue. This call blocks until events are in the queue
         pub fn poll(self: *Self) void {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            const io = std.Io.Threaded.global_single_threaded.io();
+            self.mutex.lockUncancelable(io);
+            defer self.mutex.unlock(io);
             while (self.isEmptyLH()) {
-                self.not_empty.wait(&self.mutex);
+                self.not_empty.waitUncancelable(io, &self.mutex);
             }
             std.debug.assert(!self.isEmptyLH());
         }
 
         pub fn lock(self: *Self) void {
-            self.mutex.lock();
+            self.mutex.lockUncancelable(std.Io.Threaded.global_single_threaded.io());
         }
 
         pub fn unlock(self: *Self) void {
-            self.mutex.unlock();
+            self.mutex.unlock(std.Io.Threaded.global_single_threaded.io());
         }
 
         /// Used to efficiently drain the queue while the lock is externally held

@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const linux = std.os.linux;
 const posix = std.posix;
 const queue = @import("../queue.zig");
+const net = @import("../net.zig");
 const looppkg = @import("../loop.zig");
 const Callback = looppkg.Callback(@This());
 const CallbackAction = looppkg.CallbackAction;
@@ -125,11 +126,15 @@ pub const Loop = struct {
 
     /// Update the cached time.
     pub fn update_now(self: *Loop) void {
-        if (posix.clock_gettime(posix.CLOCK.MONOTONIC)) |new_time| {
-            self.cached_now = new_time;
-            self.flags.now_outdated = false;
-        } else |_| {
-            // Errors are ignored.
+        var new_time: linux.timespec = undefined;
+        switch (posix.errno(linux.clock_gettime(.MONOTONIC, &new_time))) {
+            .SUCCESS => {
+                self.cached_now = new_time;
+                self.flags.now_outdated = false;
+            },
+            else => {
+                // Errors are ignored.
+            },
         }
     }
 
@@ -219,6 +224,7 @@ pub const Loop = struct {
         RingShuttingDown,
         OpcodeNotSupported,
         SignalInterrupt,
+        InvalidThread,
     };
 
     /// Submit all queued operations. This never does an io_uring submit
@@ -927,7 +933,7 @@ pub const Operation = union(OperationType) {
 
     connect: struct {
         socket: posix.socket_t,
-        addr: std.net.Address,
+        addr: net.Address,
     },
 
     poll: struct {
@@ -975,7 +981,7 @@ pub const Operation = union(OperationType) {
 
     shutdown: struct {
         socket: posix.socket_t,
-        how: posix.ShutdownHow = .both,
+        how: std.Io.net.ShutdownHow = .both,
     },
 
     pwrite: struct {
@@ -1400,7 +1406,6 @@ test "io_uring: timer remove" {
 
 test "io_uring: socket accept/connect/send/recv/close" {
     const mem = std.mem;
-    const net = std.net;
     const os = posix;
     const testing = std.testing;
 
@@ -1625,7 +1630,6 @@ test "io_uring: socket accept/connect/send/recv/close" {
 
 test "io_uring: sendmsg/recvmsg" {
     const mem = std.mem;
-    const net = std.net;
     const os = posix;
     const testing = std.testing;
 
@@ -1724,7 +1728,6 @@ test "io_uring: sendmsg/recvmsg" {
 
 test "io_uring: socket read cancellation" {
     const mem = std.mem;
-    const net = std.net;
     const testing = std.testing;
 
     var loop = try Loop.init(.{});

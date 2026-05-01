@@ -40,6 +40,10 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Atomic = std.atomic.Value;
 
+fn stdIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 stack_size: u32,
 max_threads: u32,
 sync: Atomic(u32) = Atomic(u32).init(@bitCast(Sync{})),
@@ -487,7 +491,7 @@ const Event = struct {
             // Acquiring to WAITING will make the next notify() or shutdown() wake a sleeping futex thread
             // who will either exit on SHUTDOWN or acquire with WAITING again, ensuring all threads are awoken.
             // This unfortunately results in the last notify() or shutdown() doing an extra futex wake but that's fine.
-            std.Thread.Futex.wait(&self.state, WAITING);
+            std.Io.futexWaitUncancelable(stdIo(), u32, &self.state.raw, WAITING);
             state = self.state.load(.monotonic);
             acquire_with = WAITING;
         }
@@ -513,7 +517,7 @@ const Event = struct {
         // Only wake threads sleeping in futex if the state is WAITING.
         // Avoids unnecessary wake ups.
         if (state == WAITING) {
-            std.Thread.Futex.wake(&self.state, wake_threads);
+            std.Io.futexWake(stdIo(), u32, &self.state.raw, wake_threads);
         }
     }
 };

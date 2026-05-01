@@ -10,7 +10,8 @@ const gtk = @import("gtk");
 
 pub fn fromFilename(path: [:0]const u8) ?*gtk.MediaFile {
     assert(std.fs.path.isAbsolute(path));
-    std.fs.accessAbsolute(path, .{ .mode = .read_only }) catch |err| {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    std.Io.Dir.accessAbsolute(io, path, .{ .read = true }) catch |err| {
         log.warn("unable to access {s}: {t}", .{ path, err });
         return null;
     };

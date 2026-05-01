@@ -55,10 +55,7 @@ pub fn ScaleValue(comptime T: type) fn (anytype) T {
                                 // In order to fit `value * out_max` we need an
                                 // int of size `in_bits + out_bits` in the worst
                                 // case scenario.
-                                const FitInt = @Type(.{ .int = .{
-                                    .bits = in_bits + out_bits,
-                                    .signedness = .unsigned,
-                                } });
+                                const FitInt = @Int(.unsigned, in_bits + out_bits);
 
                                 return @truncate((@as(FitInt, value) * out_max + in_max / 2) / in_max);
                             } else return value;

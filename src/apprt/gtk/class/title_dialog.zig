@@ -143,7 +143,7 @@ pub const TitleDialog = extern struct {
         signals.set.impl.emit(
             self,
             null,
-            .{title.ptr},
+            .{ .@"0" = title.ptr },
             null,
         );
     }

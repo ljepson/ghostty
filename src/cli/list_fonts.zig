@@ -78,7 +78,10 @@ fn runArgs(alloc_gpa: Allocator, argsIter: anytype) !u8 {
     // Its possible to build Ghostty without font discovery!
     if (comptime font.Discover == void) {
         var buffer: [1024]u8 = undefined;
-        var stderr_writer = std.fs.File.stderr().writer(&buffer);
+        var stderr_writer = std.Io.File.stderr().writerStreaming(
+            std.Io.Threaded.global_single_threaded.io(),
+            &buffer,
+        );
         const stderr = &stderr_writer.interface;
         try stderr.print(
             \\Ghostty was built without a font discovery mechanism. This is a compile-time
@@ -92,7 +95,10 @@ fn runArgs(alloc_gpa: Allocator, argsIter: anytype) !u8 {
     }
 
     var buffer: [2048]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&buffer);
+    var stdout_writer = std.Io.File.stdout().writerStreaming(
+        std.Io.Threaded.global_single_threaded.io(),
+        &buffer,
+    );
     const stdout = &stdout_writer.interface;
 
     // We'll be putting our fonts into a list categorized by family

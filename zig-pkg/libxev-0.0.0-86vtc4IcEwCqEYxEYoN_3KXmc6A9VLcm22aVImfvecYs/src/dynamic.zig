@@ -433,12 +433,18 @@ fn EnumSubset(comptime T: type, comptime values: []const T) type {
         .value = @intFromEnum(value),
     };
 
-    return @Type(.{ .@"enum" = .{
-        .tag_type = @typeInfo(T).@"enum".tag_type,
-        .fields = &fields,
-        .decls = &.{},
-        .is_exhaustive = true,
-    } });
+    comptime var field_names: [fields.len][]const u8 = undefined;
+    comptime var field_values: [fields.len]@typeInfo(T).@"enum".tag_type = undefined;
+    for (fields, 0..) |field, i| {
+        field_names[i] = field.name;
+        field_values[i] = @intCast(field.value);
+    }
+    return @Enum(
+        @typeInfo(T).@"enum".tag_type,
+        .exhaustive,
+        &field_names,
+        &field_values,
+    );
 }
 
 /// Creates a union type that can hold the implementation of a given
@@ -490,17 +496,21 @@ fn Union(
         count += 1;
     }
 
-    return @Type(.{
-        .@"union" = .{
-            .layout = .auto,
-            .tag_type = if (tagged) EnumSubset(
-                AllBackend,
-                bes,
-            ) else null,
-            .fields = fields[0..count],
-            .decls = &.{},
-        },
-    });
+    comptime var field_names: [count][]const u8 = undefined;
+    comptime var field_types: [count]type = undefined;
+    comptime var field_attrs: [count]std.builtin.Type.UnionField.Attributes = undefined;
+    for (fields[0..count], 0..) |union_field, i| {
+        field_names[i] = union_field.name;
+        field_types[i] = union_field.type;
+        field_attrs[i] = .{ .@"align" = union_field.alignment };
+    }
+    return @Union(
+        .auto,
+        if (tagged) EnumSubset(AllBackend, bes) else null,
+        &field_names,
+        &field_types,
+        &field_attrs,
+    );
 }
 
 /// Create a new error set from a list of error sets within

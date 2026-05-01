@@ -7,11 +7,22 @@ const isFlatpak = @import("flatpak.zig").isFlatpak;
 pub const Error = Allocator.Error;
 
 /// Get the environment map.
-pub fn getEnvMap(alloc: Allocator) !std.process.EnvMap {
-    return if (isFlatpak())
-        std.process.EnvMap.init(alloc)
-    else
-        try std.process.getEnvMap(alloc);
+pub fn getEnvMap(alloc: Allocator) !std.process.Environ.Map {
+    if (isFlatpak()) return .init(alloc);
+
+    return switch (builtin.os.tag) {
+        .windows => try std.process.Environ.createMap(.{
+            .block = .global,
+        }, alloc),
+
+        else => {
+            var len: usize = 0;
+            while (c.environ[len] != null) : (len += 1) {}
+            return try std.process.Environ.createMap(.{
+                .block = .{ .slice = c.environ[0..len :null] },
+            }, alloc);
+        },
+    };
 }
 
 /// Append a value to an environment variable such as PATH.
@@ -82,7 +93,15 @@ pub const GetEnvResult = struct {
 pub fn getenv(alloc: Allocator, key: []const u8) Error!?GetEnvResult {
     return switch (builtin.os.tag) {
         // Non-Windows doesn't need to allocate
-        else => if (posix.getenv(key)) |v| .{ .value = v } else null,
+        else => {
+            if (!builtin.link_libc) return null;
+            const key_z = try alloc.dupeZ(u8, key);
+            defer alloc.free(key_z);
+            return if (std.c.getenv(key_z.ptr)) |v|
+                .{ .value = std.mem.span(v) }
+            else
+                null;
+        },
 
         // Windows needs to allocate
         .windows => if (std.process.getEnvVarOwned(alloc, key)) |v| .{
@@ -125,6 +144,9 @@ pub fn unsetenv(key: [:0]const u8) c_int {
 }
 
 const c = struct {
+    // POSIX environment block.
+    extern "c" var environ: [*:null]?[*:0]u8;
+
     // POSIX
     extern "c" fn setenv(name: ?[*]const u8, value: ?[*]const u8, overwrite: c_int) c_int;
     extern "c" fn unsetenv(name: ?[*]const u8) c_int;

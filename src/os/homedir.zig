@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const passwd = @import("passwd.zig");
-const posix = std.posix;
 const objc = @import("objc");
 
 const Error = error{
@@ -25,7 +24,7 @@ pub inline fn home(buf: []u8) !?[]const u8 {
 
 fn homeUnix(buf: []u8) !?[]const u8 {
     // First: if we have a HOME env var, then we use that.
-    if (posix.getenv("HOME")) |result| {
+    if (getenv("HOME")) |result| {
         if (buf.len < result.len) return Error.BufferTooSmall;
         @memcpy(buf[0..result.len], result);
         return buf[0..result.len];
@@ -58,22 +57,13 @@ fn homeUnix(buf: []u8) !?[]const u8 {
         return buf[0..result.len];
     }
 
-    // If all else fails, have the shell tell us...
-    fba.reset();
-    const run = try std.process.Child.run(.{
-        .allocator = fba.allocator(),
-        .argv = &[_][]const u8{ "/bin/sh", "-c", "cd && pwd" },
-        .max_output_bytes = fba.buffer.len / 2,
-    });
-
-    if (run.term == .Exited and run.term.Exited == 0) {
-        const result = trimSpace(run.stdout);
-        if (buf.len < result.len) return Error.BufferTooSmall;
-        @memcpy(buf[0..result.len], result);
-        return buf[0..result.len];
-    }
-
     return null;
+}
+
+fn getenv(key: [:0]const u8) ?[]const u8 {
+    if (!builtin.link_libc) return null;
+    const value = std.c.getenv(key.ptr) orelse return null;
+    return std.mem.span(value);
 }
 
 fn homeWindows(buf: []u8) !?[]const u8 {
@@ -103,10 +93,6 @@ fn homeWindows(buf: []u8) !?[]const u8 {
     };
 
     return buf[0 .. drive_len + path_len];
-}
-
-fn trimSpace(input: []const u8) []const u8 {
-    return std.mem.trim(u8, input, " \n\t");
 }
 
 pub const ExpandError = error{

@@ -1,21 +1,16 @@
 const std = @import("std");
-
-// Until the gobject bindings are built at the same time we are building
-// Ghostty, we need to import `adwaita.h` directly to ensure that the version
-// macros match the version of `libadwaita` that we are building/linking
-// against.
-const c = @cImport({
-    @cInclude("adwaita.h");
-});
-
 const adw = @import("adw");
 
 const log = std.log.scoped(.gtk);
 
+const build_major = adw.MAJOR_VERSION;
+const build_minor = adw.MINOR_VERSION;
+const build_micro = adw.MICRO_VERSION;
+
 pub const comptime_version: std.SemanticVersion = .{
-    .major = c.ADW_MAJOR_VERSION,
-    .minor = c.ADW_MINOR_VERSION,
-    .patch = c.ADW_MICRO_VERSION,
+    .major = build_major,
+    .minor = build_minor,
+    .patch = build_micro,
 };
 
 pub fn getRuntimeVersion() std.SemanticVersion {
@@ -89,14 +84,14 @@ test "versionAtLeast" {
 
     const funs = &.{ atLeast, runtimeAtLeast };
     inline for (funs) |fun| {
-        try testing.expect(fun(c.ADW_MAJOR_VERSION, c.ADW_MINOR_VERSION, c.ADW_MICRO_VERSION));
-        try testing.expect(!fun(c.ADW_MAJOR_VERSION, c.ADW_MINOR_VERSION, c.ADW_MICRO_VERSION + 1));
-        try testing.expect(!fun(c.ADW_MAJOR_VERSION, c.ADW_MINOR_VERSION + 1, c.ADW_MICRO_VERSION));
-        try testing.expect(!fun(c.ADW_MAJOR_VERSION + 1, c.ADW_MINOR_VERSION, c.ADW_MICRO_VERSION));
-        try testing.expect(fun(c.ADW_MAJOR_VERSION - 1, c.ADW_MINOR_VERSION, c.ADW_MICRO_VERSION));
-        try testing.expect(fun(c.ADW_MAJOR_VERSION - 1, c.ADW_MINOR_VERSION + 1, c.ADW_MICRO_VERSION));
-        try testing.expect(fun(c.ADW_MAJOR_VERSION - 1, c.ADW_MINOR_VERSION, c.ADW_MICRO_VERSION + 1));
-        try testing.expect(fun(c.ADW_MAJOR_VERSION, c.ADW_MINOR_VERSION - 1, c.ADW_MICRO_VERSION + 1));
+        try testing.expect(fun(build_major, build_minor, build_micro));
+        try testing.expect(!fun(build_major, build_minor, build_micro + 1));
+        try testing.expect(!fun(build_major, build_minor + 1, build_micro));
+        try testing.expect(!fun(build_major + 1, build_minor, build_micro));
+        try testing.expect(fun(build_major - 1, build_minor, build_micro));
+        try testing.expect(fun(build_major - 1, build_minor + 1, build_micro));
+        try testing.expect(fun(build_major - 1, build_minor, build_micro + 1));
+        try testing.expect(fun(build_major, build_minor - 1, build_micro + 1));
     }
 }
 

@@ -2,9 +2,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const assert = std.debug.assert;
+const linux = std.os.linux;
 const posix = std.posix;
 const common = @import("common.zig");
 const darwin = @import("../darwin.zig");
+
+fn closeFd(fd: posix.fd_t) void {
+    _ = linux.close(fd);
+}
 
 pub fn Async(comptime xev: type) type {
     if (xev.dynamic) return AsyncDynamic(xev);
@@ -57,11 +62,16 @@ fn AsyncEventFd(comptime xev: type) type {
                     ),
 
                     // Use std.posix if we can.
-                    else => try std.posix.eventfd(
-                        0,
-                        std.os.linux.EFD.CLOEXEC |
-                            std.os.linux.EFD.NONBLOCK,
-                    ),
+                    else => eventfd: {
+                        const rc = linux.eventfd(
+                            0,
+                            linux.EFD.CLOEXEC | linux.EFD.NONBLOCK,
+                        );
+                        switch (posix.errno(rc)) {
+                            .SUCCESS => break :eventfd @intCast(rc),
+                            else => return error.Unexpected,
+                        }
+                    },
                 },
             };
         }
@@ -69,7 +79,7 @@ fn AsyncEventFd(comptime xev: type) type {
         /// Clean up the async. This will forcibly deinitialize any resources
         /// and may result in erroneous wait callbacks to be fired.
         pub fn deinit(self: *Self) void {
-            std.posix.close(self.fd);
+            closeFd(self.fd);
         }
 
         /// Wait for a message on this async. Note that async messages may be
@@ -202,10 +212,14 @@ fn AsyncEventFd(comptime xev: type) type {
         pub fn notify(self: Self) !void {
             // We want to just write "1" in the correct byte order as our host.
             const val = @as([8]u8, @bitCast(@as(u64, 1)));
-            _ = posix.write(self.fd, &val) catch |err| switch (err) {
-                error.WouldBlock => return,
-                else => return err,
-            };
+            while (true) {
+                switch (posix.errno(linux.write(self.fd, &val, val.len))) {
+                    .SUCCESS => return,
+                    .INTR => continue,
+                    .AGAIN => return,
+                    else => |err| return posix.unexpectedErrno(err),
+                }
+            }
         }
 
         test {

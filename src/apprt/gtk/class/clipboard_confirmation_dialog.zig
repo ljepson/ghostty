@@ -240,14 +240,14 @@ pub const ClipboardConfirmationDialog = extern struct {
             signals.deny.impl.emit(
                 self,
                 null,
-                .{remember},
+                .{ .@"0" = remember },
                 null,
             );
         } else if (std.mem.orderZ(u8, response_id, "ok") == .eq) {
             signals.confirm.impl.emit(
                 self,
                 null,
-                .{remember},
+                .{ .@"0" = remember },
                 null,
             );
         }

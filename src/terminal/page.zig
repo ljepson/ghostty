@@ -2145,7 +2145,7 @@ pub const Cell = packed struct(u64) {
         return switch (self.content_tag) {
             .codepoint,
             .codepoint_grapheme,
-            => self.content.codepoint,
+            => @intCast(self.content.codepoint),
 
             .bg_color_palette,
             .bg_color_rgb,

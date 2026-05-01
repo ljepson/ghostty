@@ -31,6 +31,10 @@ const Config = configpkg.Config;
 
 const log = std.log.scoped(.font_shared_grid_set);
 
+fn io() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// The allocator to use for all heap allocations.
 alloc: Allocator,
 
@@ -44,7 +48,7 @@ font_lib: Library,
 font_discover: ?Discover = null,
 
 /// Lock to protect multi-threaded access to the map.
-lock: std.Thread.Mutex = .{},
+lock: std.Io.Mutex = .init,
 
 pub const InitError = Library.InitError;
 
@@ -79,8 +83,8 @@ pub fn deinit(self: *SharedGridSet) void {
 
 /// Returns the number of cached grids.
 pub fn count(self: *SharedGridSet) usize {
-    self.lock.lock();
-    defer self.lock.unlock();
+    self.lock.lockUncancelable(io());
+    defer self.lock.unlock(io());
     return self.map.count();
 }
 
@@ -100,8 +104,8 @@ pub fn ref(
     var key = try Key.init(self.alloc, config, font_size);
     errdefer key.deinit();
 
-    self.lock.lock();
-    defer self.lock.unlock();
+    self.lock.lockUncancelable(io());
+    defer self.lock.unlock(io());
 
     const gop = try self.map.getOrPut(self.alloc, key);
     if (gop.found_existing) {
@@ -392,8 +396,8 @@ fn collection(
 /// Decrement the ref count for the given key. If the ref count is zero,
 /// the grid will be deinitialized and removed from the map.j:w
 pub fn deref(self: *SharedGridSet, key: Key) void {
-    self.lock.lock();
-    defer self.lock.unlock();
+    self.lock.lockUncancelable(io());
+    defer self.lock.unlock(io());
 
     const entry = self.map.getEntry(key) orelse return;
     assert(entry.value_ptr.ref >= 1);

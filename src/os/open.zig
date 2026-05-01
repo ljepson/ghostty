@@ -21,48 +21,33 @@ pub fn open(
     kind: apprt.action.OpenUrl.Kind,
     url: []const u8,
 ) !void {
-    var exe: std.process.Child = switch (builtin.os.tag) {
-        .linux, .freebsd => .init(
-            &.{ "xdg-open", url },
-            alloc,
-        ),
-
-        .windows => .init(
-            &.{ "rundll32", "url.dll,FileProtocolHandler", url },
-            alloc,
-        ),
-
-        .macos => .init(
-            switch (kind) {
-                .text => &.{ "open", "-t", url },
-                .html, .unknown => &.{ "open", url },
-            },
-            alloc,
-        ),
-
+    const argv: []const []const u8 = switch (builtin.os.tag) {
+        .linux, .freebsd => &.{ "xdg-open", url },
+        .windows => &.{ "rundll32", "url.dll,FileProtocolHandler", url },
+        .macos => switch (kind) {
+            .text => &.{ "open", "-t", url },
+            .html, .unknown => &.{ "open", url },
+        },
         .ios => return error.Unimplemented,
         else => @compileError("unsupported OS"),
     };
 
     // Pipe stdout/stderr so we can collect output from the command.
-    // This must be set before spawning the process.
-    exe.stdout_behavior = .Pipe;
-    exe.stderr_behavior = .Pipe;
-
-    // In the snap on Linux the launcher exports LD_LIBRARY_PATH pointing at
-    // the snap's bundled libraries. Leaking this into child process can
-    // can be problematic, so let's drop it from the env
-    var snap_env: std.process.EnvMap = if (comptime build_config.snap) blk: {
+    var snap_env: std.process.Environ.Map = if (comptime build_config.snap) blk: {
         var env = try std.process.getEnvMap(alloc);
         env.remove("LD_LIBRARY_PATH");
         break :blk env;
     } else undefined;
     defer if (comptime build_config.snap) snap_env.deinit();
-    if (comptime build_config.snap) exe.env_map = &snap_env;
 
-    // Spawn the process on our same thread so we can detect failure
-    // quickly.
-    try exe.spawn();
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const exe = try std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .inherit,
+        .stdout = .pipe,
+        .stderr = .pipe,
+        .environ_map = if (comptime build_config.snap) &snap_env else null,
+    });
 
     // Create a thread that handles collecting output and reaping
     // the process. This is done in a separate thread because SOME
@@ -73,25 +58,40 @@ pub fn open(
 }
 
 fn openThread(alloc: Allocator, exe_: std.process.Child) !void {
-    // 50 KiB is the default value used by std.process.Child.run and should
+    // 50 KiB is the default value used by std.process.run and should
     // be enough to get the output we care about.
     const output_max_size = 50 * 1024;
-
-    var stdout: std.ArrayListUnmanaged(u8) = .{};
-    var stderr: std.ArrayListUnmanaged(u8) = .{};
-    defer {
-        stdout.deinit(alloc);
-        stderr.deinit(alloc);
-    }
+    const io = std.Io.Threaded.global_single_threaded.io();
 
     // Copy the exe so it is non-const. This is necessary because wait()
     // requires a mutable reference and we can't have one as a thread
     // param.
     var exe = exe_;
-    try exe.collectOutput(alloc, &stdout, &stderr, output_max_size);
-    _ = try exe.wait();
+    defer exe.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(alloc, io, multi_reader_buffer.toStreams(), &.{ exe.stdout.?, exe.stderr.? });
+    defer multi_reader.deinit();
+
+    const stdout_reader = multi_reader.reader(0);
+    const stderr_reader = multi_reader.reader(1);
+
+    while (multi_reader.fill(output_max_size, .none)) |_| {
+        if (stdout_reader.buffered().len > output_max_size or
+            stderr_reader.buffered().len > output_max_size) break;
+    } else |err| switch (err) {
+        error.EndOfStream => {},
+        else => |e| return e,
+    }
+
+    try multi_reader.checkAnyError();
+    _ = try exe.wait(io);
+
+    const stderr = try multi_reader.toOwnedSlice(1);
+    defer alloc.free(stderr);
 
     // If we have any stderr output we log it. This makes it easier for
     // users to debug why some open commands may not work as expected.
-    if (stderr.items.len > 0) log.warn("wait stderr={s}", .{stderr.items});
+    if (stderr.len > 0) log.warn("wait stderr={s}", .{stderr});
 }

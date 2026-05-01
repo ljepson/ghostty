@@ -1,8 +1,9 @@
 //! Utility package for miscellaneous functions.
 
-const builtin = @import("std").builtin;
-const debug = @import("std").debug;
-const mem = @import("std").mem;
+const std = @import("std");
+const builtin = std.builtin;
+const debug = std.debug;
+const mem = std.mem;
 
 const colorpkg = @import("../color.zig");
 
@@ -48,14 +49,19 @@ pub fn vectorize(comptime T: type) type {
             .alignment = @alignOf(@Vector(vector_length, f.type)),
         };
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &new_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    comptime var field_names: [new_fields.len][]const u8 = undefined;
+    comptime var field_types: [new_fields.len]type = undefined;
+    comptime var field_attrs: [new_fields.len]std.builtin.Type.StructField.Attributes = undefined;
+    for (new_fields, 0..) |field, i| {
+        field_names[i] = field.name;
+        field_types[i] = field.type;
+        field_attrs[i] = .{
+            .default_value_ptr = field.default_value_ptr,
+            .@"comptime" = field.is_comptime,
+            .@"align" = field.alignment,
+        };
+    }
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 /// Internal function for splatting, shorthand for
