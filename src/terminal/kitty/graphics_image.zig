@@ -198,16 +198,25 @@ pub const LoadingImage = struct {
         // The size from stat on may be larger than our expected size because
         // shared memory has to be a multiple of the page size.
         const stat_size: usize = stat: {
-            var stat_buf: std.c.Stat = undefined;
+            var statx_buf: std.os.linux.Statx = undefined;
             const fd_u64 = @as(u64, @intCast(fd));
-            const stat_buf_ptr = @intFromPtr(&stat_buf);
-            const ret = std.os.linux.syscall2(108, fd_u64, stat_buf_ptr);
+            const statx_buf_ptr = @intFromPtr(&statx_buf);
+            // statx(fd, NULL, AT_EMPTY_PATH, STATX_ALL, &statx_buf)
+            const ret = std.os.linux.syscall6(
+                std.os.linux.SYS.statx,
+                fd_u64,
+                0, // pathname = NULL for fd-based
+                std.os.linux.AT.EMPTY_PATH,
+                0x1fff, // STATX_ALL mask
+                statx_buf_ptr,
+                0, // reserved
+            );
             if (@as(isize, @intCast(ret)) < 0) {
-                log.warn("unable to fstat shared memory {s}: {}", .{ path, std.posix.errno(fd) });
+                log.warn("unable to fstat shared memory {s}: {}", .{ path, std.posix.errno(@as(c_int, @intCast(ret))) });
                 return error.InvalidData;
             }
-            if (stat_buf.size <= 0) return error.InvalidData;
-            break :stat @intCast(stat_buf.size);
+            if (statx_buf.size <= 0) return error.InvalidData;
+            break :stat @intCast(statx_buf.size);
         };
 
         const expected_size: usize = switch (self.image.format) {
@@ -235,8 +244,8 @@ pub const LoadingImage = struct {
         const map = std.posix.mmap(
             null,
             stat_size, // mmap always uses the stat size
-            std.c.PROT.READ,
-            std.c.MAP{ .TYPE = .SHARED },
+            .{ .READ = true },
+            .{ .TYPE = .SHARED },
             fd,
             0,
         ) catch |err| {

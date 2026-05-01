@@ -1,4 +1,11 @@
 const std = @import("std");
+const linux = std.os.linux;
+
+fn getMonotonicTime() u64 {
+    var ts: linux.timespec = undefined;
+    _ = linux.clock_gettime(.MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+}
 
 const gio = @import("gio");
 const glib = @import("glib");
@@ -85,12 +92,12 @@ pub fn postFork(cmd: *Command) Command.PostForkError!void {
         return;
     };
 
-    const start = std.time.Instant.now() catch unreachable;
+    const start = getMonotonicTime();
 
     loop: while (true) {
-        const now = std.time.Instant.now() catch unreachable;
+        const now = getMonotonicTime();
 
-        if (now.since(start) > 250 * std.time.ns_per_ms) {
+        if (now - start > 250 * std.time.ns_per_ms) {
             if (cmd.rt_pre_exec_info.linux_cgroup_hard_fail) {
                 log.err("transition to new transient systemd scope {s} took too long", .{expected_cgroup});
                 return error.PostForkError;

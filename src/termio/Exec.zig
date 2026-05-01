@@ -140,8 +140,8 @@ pub fn threadEnter(
     // Create our pipe that we'll use to kill our read thread.
     // pipe[0] is the read end, pipe[1] is the write end.
     const pipe = try internal_os.pipe();
-    errdefer posix.close(pipe[0]);
-    errdefer posix.close(pipe[1]);
+    errdefer std.os.linux.close(pipe[0]);
+    errdefer std.os.linux.close(pipe[1]);
 
     // Setup our stream so that we can write.
     var stream = xev.Stream.initFd(pty_fds.write);
@@ -559,7 +559,7 @@ pub const ThreadData = struct {
     termios_mode: ptypkg.Mode = .{},
 
     pub fn deinit(self: *ThreadData, alloc: Allocator) void {
-        posix.close(self.read_thread_pipe);
+        std.os.linux.close(self.read_thread_pipe);
 
         // Clear our write pools. We know we aren't ever going to do
         // any more IO since we stop our data stream below so we can just
@@ -927,7 +927,7 @@ const Subprocess = struct {
         self.pty = pty;
         errdefer if (!in_child) {
             if (comptime builtin.os.tag != .windows) {
-                _ = posix.close(pty.slave);
+                _ = std.os.linux.close(pty.slave);
             }
 
             pty.deinit();
@@ -941,7 +941,7 @@ const Subprocess = struct {
                 // Once our subcommand is started we can close the slave
                 // side. This prevents the slave fd from being leaked to
                 // future children.
-                _ = posix.close(pty.slave);
+                _ = std.os.linux.close(pty.slave);
             }
 
             // Successful start we can clear out some memory.
@@ -987,7 +987,7 @@ const Subprocess = struct {
             }
 
             const io = std.Io.Threaded.global_single_threaded.io();
-            if (std.Io.Dir.cwd().access(proposed, io, .{})) {
+            if (std.Io.Dir.cwd().access(io, proposed, .{})) {
                 break :cwd proposed;
             } else |err| {
                 log.warn("cannot access cwd, ignoring: {}", .{err});
@@ -1032,9 +1032,9 @@ const Subprocess = struct {
             .args = self.args,
             .env = if (self.env) |*env| env else null,
             .cwd = cwd,
-            .stdin = if (builtin.os.tag == .windows) null else .{ .handle = pty.slave },
-            .stdout = if (builtin.os.tag == .windows) null else .{ .handle = pty.slave },
-            .stderr = if (builtin.os.tag == .windows) null else .{ .handle = pty.slave },
+            .stdin = if (builtin.os.tag == .windows) null else .{ .handle = pty.slave, .flags = .{ .nonblocking = false } },
+            .stdout = if (builtin.os.tag == .windows) null else .{ .handle = pty.slave, .flags = .{ .nonblocking = false } },
+            .stderr = if (builtin.os.tag == .windows) null else .{ .handle = pty.slave, .flags = .{ .nonblocking = false } },
             .pseudo_console = if (builtin.os.tag == .windows) pty.pseudo_console else {},
             .os_pre_exec = switch (comptime builtin.os.tag) {
                 .windows => null,
@@ -1281,7 +1281,7 @@ const Subprocess = struct {
 pub const ReadThread = struct {
     fn threadMainPosix(fd: posix.fd_t, io: *termio.Termio, quit: posix.fd_t) void {
         // Always close our end of the pipe when we exit.
-        defer posix.close(quit);
+        defer std.os.linux.close(quit);
 
         // Right now, on Darwin, `std.Thread.setName` can only name the current
         // thread, and we have no way to get the current thread from within it,
@@ -1383,7 +1383,7 @@ pub const ReadThread = struct {
 
     fn threadMainWindows(fd: posix.fd_t, io: *termio.Termio, quit: posix.fd_t) void {
         // Always close our end of the pipe when we exit.
-        defer posix.close(quit);
+        defer std.os.linux.close(quit);
 
         // Setup our crash metadata
         crash.sentry.thread_state = .{

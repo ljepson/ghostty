@@ -139,13 +139,14 @@ const ThreadEnterState = struct {
             input[i] = switch (item) {
                 .raw => |v| .{ .string = try alloc.dupe(u8, v) },
                 .path => |path| file: {
-                    const f = std.c.openat(std.c.AT_FDCWD, path, std.c.O.RDONLY) catch |err| {
+                    const fd = std.posix.openat(std.posix.AT.FDCWD, path, std.posix.O{}, 0) catch |err| {
                         log.warn("failed to open input file={s} err={}", .{
                             path,
                             err,
                         });
                         return error.InputNotFound;
                     };
+                    const f = std.Io.File{ .handle = fd, .flags = .{ .nonblocking = false } };
 
                     break :file .{ .file = f };
                 },

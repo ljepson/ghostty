@@ -26,7 +26,7 @@ const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
 /// Wrapper to provide a seekable reader interface over a buffer for font loading.
-fn SeekableReader(comptime T: type) type {
+fn SeekableReader() type {
     return struct {
         const Self = @This();
         reader_ctx: io.Reader,
@@ -51,7 +51,7 @@ fn SeekableReader(comptime T: type) type {
     };
 }
 
-const FileReader = SeekableReader([]const u8);
+const FileReader = SeekableReader();
 
 file: FileReader,
 dir: Directory,

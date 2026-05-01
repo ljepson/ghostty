@@ -190,7 +190,13 @@ fn startPosix(self: *Command, arena: Allocator) !void {
         @compileError("missing env vars");
 
     // Fork.
-    const pid = try posix.fork();
+    const pid = pid: {
+        const rc = std.c.fork();
+        switch (posix.errno(rc)) {
+            .SUCCESS => break :pid rc,
+            else => return error.ForkFailed,
+        }
+    };
 
     if (pid != 0) {
         // Parent, return immediately.
@@ -210,27 +216,27 @@ fn startPosix(self: *Command, arena: Allocator) !void {
         return error.ExecFailedInChild;
 
     // Setup our working directory
-    if (self.cwd) |cwd| posix.chdir(cwd) catch {
-        // This can fail if we don't have permission to go to
-        // this directory or if due to race conditions it doesn't
-        // exist or any various other reasons. We don't want to
-        // crash the entire process if this fails so we ignore it.
-        // We don't log because that'll show up in the output.
-    };
+    if (self.cwd) |cwd| cwd: {
+        const cwd_z = posix.toPosixPath(cwd) catch break :cwd;
+        switch (posix.errno(std.c.chdir(&cwd_z))) {
+            .SUCCESS => {},
+            else => {},
+        }
+    }
 
     // Restore any rlimits that were set by Ghostty. This might fail but
     // any failures are ignored (its best effort).
     global_state.rlimits.restore();
 
     // If there are pre exec callbacks, call them now.
-    if (self.os_pre_exec) |f| if (f(self)) |exitcode| posix.exit(exitcode);
-    if (self.rt_pre_exec) |f| if (f(self)) |exitcode| posix.exit(exitcode);
+    if (self.os_pre_exec) |f| if (f(self)) |exitcode| std.c._exit(exitcode);
+    if (self.rt_pre_exec) |f| if (f(self)) |exitcode| std.c._exit(exitcode);
 
     // Finally, replace our process.
     // Note: we must use the "p"-variant of exec here because we
     // do not guarantee our command is looked up already in the path.
-    const err = posix.execvpeZ(self.path, argsZ, envp);
-
+    // linux.execve returns -errno on failure, checked below.
+    const errno_val = linux.execve(self.path, argsZ, envp);
     // If we are executing this code, the exec failed. We're in the
     // child process so there isn't much we can do. We try to output
     // something reasonable. Its important to note we MUST NOT return
@@ -238,21 +244,22 @@ fn startPosix(self: *Command, arena: Allocator) !void {
     var stderr_buf: [1024]u8 = undefined;
     var stderr_writer = std.Io.File.stderr().writer(stdIo(), &stderr_buf);
     const stderr = &stderr_writer.interface;
-    switch (err) {
-        error.FileNotFound => stderr.print(
+    const err = @as(isize, @intCast errno_val);
+    if (err == -@as(isize, @intCast(std.c.ENOENT))) {
+        stderr.print(
             \\Requested executable not found. Please verify the command is on
             \\the PATH and try again.
             \\
         ,
             .{},
-        ) catch {},
-
-        else => stderr.print(
+        ) catch {};
+    } else {
+        stderr.print(
             \\exec syscall failed with unexpected error: {}
             \\
         ,
             .{err},
-        ) catch {},
+        ) catch {};
     }
     stderr.flush() catch {};
 
@@ -287,7 +294,7 @@ fn startWindows(self: *Command, arena: Allocator) !void {
             .creation = windows.OPEN_EXISTING,
         },
     ) else null;
-    defer if (null_fd) |fd| posix.close(fd);
+    defer if (null_fd) |fd| std.os.linux.close(fd);
 
     // TODO: In the case of having FDs instead of pty, need to set up
     // attributes such that the child process only inherits these handles,

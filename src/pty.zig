@@ -261,8 +261,8 @@ const PosixPty = struct {
         }
 
         // Can close master/slave pair now
-        posix.close(self.slave);
-        posix.close(self.master);
+        _ = std.c.close(self.slave);
+        _ = std.c.close(self.master);
     }
 
     /// Get information about the process(es) attached to the PTY. Returns
