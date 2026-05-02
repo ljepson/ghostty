@@ -458,8 +458,6 @@ pub const Window = extern struct {
             if (overrides.command != null) break :id null;
             const config = if (priv.config) |v| v.get() else break :id null;
             if (!drift_restore.enabled(config)) break :id null;
-            if (config.command != null) break :id null;
-            if (config.@"initial-command" != null and Application.default().core().first) break :id null;
 
             const claimed = drift_restore.claimTabId(alloc, config) catch |err| {
                 log.warn("unable to claim Drift restore tab ID err={}", .{err});

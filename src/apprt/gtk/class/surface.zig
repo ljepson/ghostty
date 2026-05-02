@@ -3376,6 +3376,7 @@ pub const Surface = extern struct {
 
         if (priv.overrides.command) |c| {
             config.command = try c.clone(config._arena.?.allocator());
+            config.@"session-backend" = .native;
         }
         if (priv.overrides.working_directory) |wd| {
             const config_alloc = config.arenaAlloc();

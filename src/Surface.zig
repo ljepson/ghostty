@@ -469,6 +469,7 @@ fn driftSessionCommand(
     alloc: Allocator,
     config: *const configpkg.Config,
     surface_id: u64,
+    child_command: ?*const configpkg.Command,
 ) !configpkg.Command {
     const restore_id = config.@"drift-session-id" orelse
         try std.fmt.allocPrint(alloc, "0x{x:0>16}", .{surface_id});
@@ -496,22 +497,34 @@ fn driftSessionCommand(
     );
     const profile_tag = try alloc.dupeZ(u8, profile_tag_raw);
 
-    const args = try alloc.alloc([:0]const u8, 13);
-    args[0] = "drift";
-    args[1] = "connect";
-    args[2] = config.@"drift-host";
-    args[3] = "--name";
-    args[4] = session_name;
-    args[5] = "--tag";
-    args[6] = "app=ghostty";
-    args[7] = "--tag";
-    args[8] = surface_tag;
-    args[9] = "--tag";
-    args[10] = restore_tag;
-    args[11] = "--tag";
-    args[12] = profile_tag;
+    var args: std.ArrayListUnmanaged([:0]const u8) = .empty;
+    try args.appendSlice(alloc, &.{
+        "drift",
+        "connect",
+        config.@"drift-host",
+        "--name",
+        session_name,
+        "--tag",
+        "app=ghostty",
+        "--tag",
+        surface_tag,
+        "--tag",
+        restore_tag,
+        "--tag",
+        profile_tag,
+    });
 
-    return .{ .direct = args };
+    if (child_command) |cmd| {
+        try args.append(alloc, "--");
+
+        var it = try cmd.argIterator(alloc);
+        defer it.deinit();
+        while (it.next()) |arg| {
+            try args.append(alloc, try alloc.dupeZ(u8, arg));
+        }
+    }
+
+    return .{ .direct = try args.toOwnedSlice(alloc) };
 }
 
 /// Create a new surface. This must be called from the main thread. The
@@ -686,9 +699,13 @@ pub fn init(
 
     var generated_command_arena = ArenaAllocator.init(alloc);
     defer generated_command_arena.deinit();
-    const command: ?configpkg.Command = if (configured_command == null and
-        config.@"session-backend" == .drift)
-        try driftSessionCommand(generated_command_arena.allocator(), config, self.id)
+    const command: ?configpkg.Command = if (config.@"session-backend" == .drift)
+        try driftSessionCommand(
+            generated_command_arena.allocator(),
+            config,
+            self.id,
+            if (configured_command) |*cmd| cmd else null,
+        )
     else
         configured_command;
 
