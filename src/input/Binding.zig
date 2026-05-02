@@ -367,6 +367,9 @@ pub const Action = union(enum) {
     /// Copy the most recent shell-integration command output to the clipboard.
     copy_last_command_output,
 
+    /// Copy the most recent failed shell-integration command output to the clipboard.
+    copy_last_failed_output,
+
     /// Paste the contents of the default clipboard.
     paste_from_clipboard,
 
@@ -417,6 +420,9 @@ pub const Action = union(enum) {
     /// Navigate the search results. If there is no active search, this
     /// is not performed.
     navigate_search: NavigateSearch,
+
+    /// Navigate to the previous or next shell-integration command output.
+    navigate_command: NavigateCommand,
 
     /// Start a search if it isn't started already. This doesn't set any
     /// search terms, but opens the UI for searching.
@@ -999,6 +1005,12 @@ pub const Action = union(enum) {
         next,
     };
 
+    /// Direction for navigate_command.
+    pub const NavigateCommand = enum {
+        previous,
+        next,
+    };
+
     pub const AdjustSelection = enum {
         left,
         right,
@@ -1342,12 +1354,14 @@ pub const Action = union(enum) {
             .cursor_key,
             .search,
             .navigate_search,
+            .navigate_command,
             .search_selection,
             .start_search,
             .end_search,
             .reset,
             .copy_to_clipboard,
             .copy_last_command_output,
+            .copy_last_failed_output,
             .copy_url_to_clipboard,
             .copy_title_to_clipboard,
             .paste_from_clipboard,

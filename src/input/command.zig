@@ -201,6 +201,22 @@ fn actionCommands(action: Action.Key) []const Command {
             .description = "Copy the most recent shell-integration-delimited command output to the clipboard.",
         }},
 
+        .copy_last_failed_output => comptime &.{.{
+            .action = .copy_last_failed_output,
+            .title = "Copy Last Failed Command Output",
+            .description = "Copy the most recent failed command output to the clipboard.",
+        }},
+
+        .navigate_command => comptime &.{ .{
+            .action = .{ .navigate_command = .previous },
+            .title = "Previous Command Output",
+            .description = "Navigate to the previous shell-integration-delimited command output.",
+        }, .{
+            .action = .{ .navigate_command = .next },
+            .title = "Next Command Output",
+            .description = "Navigate to the next shell-integration-delimited command output.",
+        } },
+
         .copy_title_to_clipboard => comptime &.{.{
             .action = .copy_title_to_clipboard,
             .title = "Copy Terminal Title to Clipboard",

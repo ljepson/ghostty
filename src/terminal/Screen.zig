@@ -2911,6 +2911,20 @@ pub fn selectOutput(self: *Screen, pin: Pin) ?Selection {
     return self.selectOutputForPrompt(prompt_pin);
 }
 
+/// Select the most recent command output in the scrollback, starting
+/// from the cursor position and working backwards. The limits of the
+/// output are determined by semantic prompt information provided by
+/// shell integration. This variant works cross-page because it uses
+/// promptIterator which traverses pages automatically.
+pub fn selectLastOutputCrossPage(self: *Screen) ?Selection {
+    const cursor_pin = self.cursor.page_pin;
+    var it = cursor_pin.promptIterator(.left_up, null);
+    while (it.next()) |prompt_pin| {
+        if (self.selectOutputForPrompt(prompt_pin)) |sel| return sel;
+    }
+    return null;
+}
+
 /// Select the most recent command output in the scrollback. The limits of the
 /// output are determined by semantic prompt information provided by shell
 /// integration.
@@ -2918,6 +2932,22 @@ pub fn selectLastOutput(self: *Screen) ?Selection {
     const br = self.pages.getBottomRight(.screen) orelse return null;
     var it = br.promptIterator(.left_up, null);
     while (it.next()) |prompt_pin| {
+        if (self.selectOutputForPrompt(prompt_pin)) |sel| return sel;
+    }
+
+    return null;
+}
+
+/// Select the most recent failed command output in the scrollback. The command
+/// is considered failed if the row it ended on has command_failed set.
+/// The limits of the output are determined by semantic prompt information
+/// provided by shell integration.
+pub fn selectLastFailedOutput(self: *Screen) ?Selection {
+    const br = self.pages.getBottomRight(.screen) orelse return null;
+    var it = br.promptIterator(.left_up, null);
+    while (it.next()) |prompt_pin| {
+        const rac = prompt_pin.rowAndCell();
+        if (!rac.row.command_failed) continue;
         if (self.selectOutputForPrompt(prompt_pin)) |sel| return sel;
     }
 
@@ -8363,8 +8393,11 @@ test "Screen: selectWord" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"', '│', '`', '|', ':', ';',
-        ',', '(', ')',  '[',  ']', '{',   '}', '<', '>', '$',
+        0,   ' ', '\t', '\'', '"',
+        '│',
+        '`', '|', ':',  ';',  ',',
+        '(', ')', '[',  ']',  '{',
+        '}', '<', '>',  '$',
     };
 
     // Outside of active area
@@ -8484,8 +8517,11 @@ test "Screen: selectWord across soft-wrap" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"', '│', '`', '|', ':', ';',
-        ',', '(', ')',  '[',  ']', '{',   '}', '<', '>', '$',
+        0,   ' ', '\t', '\'', '"',
+        '│',
+        '`', '|', ':',  ';',  ',',
+        '(', ')', '[',  ']',  '{',
+        '}', '<', '>',  '$',
     };
 
     {
@@ -8556,8 +8592,11 @@ test "Screen: selectWord whitespace across soft-wrap" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"', '│', '`', '|', ':', ';',
-        ',', '(', ')',  '[',  ']', '{',   '}', '<', '>', '$',
+        0,   ' ', '\t', '\'', '"',
+        '│',
+        '`', '|', ':',  ';',  ',',
+        '(', ')', '[',  ']',  '{',
+        '}', '<', '>',  '$',
     };
 
     // Going forward
@@ -8618,8 +8657,11 @@ test "Screen: selectWord with character boundary" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"', '│', '`', '|', ':', ';',
-        ',', '(', ')',  '[',  ']', '{',   '}', '<', '>', '$',
+        0,   ' ', '\t', '\'', '"',
+        '│',
+        '`', '|', ':',  ';',  ',',
+        '(', ')', '[',  ']',  '{',
+        '}', '<', '>',  '$',
     };
 
     const cases = [_][]const u8{
@@ -8848,6 +8890,241 @@ test "Screen: selectLastOutput" {
     });
     defer alloc.free(contents);
     try testing.expectEqualStrings("second", contents);
+}
+
+test "Screen: selectLastOutputCrossPage single page" {
+    // selectLastOutputCrossPage starts from cursor position instead of bottom-right.
+    // On a single page, it should behave identically to selectLastOutput.
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 10, .max_scrollback = 0 });
+    defer s.deinit();
+
+    // First command
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("one\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("first\n");
+
+    // Second command
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("two\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("second\n");
+
+    // Position cursor in the middle (not at bottom)
+    s.cursorAbsolute(0, 3);
+
+    var sel = s.selectLastOutputCrossPage().?;
+    defer sel.deinit(&s);
+    const contents = try s.selectionString(alloc, .{
+        .sel = sel,
+        .trim = false,
+    });
+    defer alloc.free(contents);
+    try testing.expectEqualStrings("second", contents);
+}
+
+test "Screen: selectLastOutputCrossPage no boundaries" {
+    // When no semantic prompt boundaries exist, selectLastOutputCrossPage
+    // should return null since there's no prompt to search from.
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 5, .max_scrollback = 0 });
+    defer s.deinit();
+
+    // Plain output with no semantic prompts
+    try s.testWriteString("plain text\n");
+    try s.testWriteString("more text\n");
+
+    // Cursor is on the output but there's no prompt boundaries
+    const result = s.selectLastOutputCrossPage();
+    try testing.expect(result == null);
+}
+
+test "Screen: selectLastFailedOutput basic" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 10, .max_scrollback = 0 });
+    defer s.deinit();
+
+    // Command 1 - success (exit_code 0)
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("ok\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("success output\n");
+
+    // Command 2 - failure (exit_code 1)
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("fail\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("error output\n");
+
+    // Manually mark the last row as command_failed
+    // (simulating what Terminal.zig does on OSC 133 D with non-zero exit code)
+    const last_row = s.pages.getRowAndCell(0, s.pages.rows - 1);
+    last_row.row.command_failed = true;
+
+    // selectLastFailedOutput should find the failed command
+    var sel = s.selectLastFailedOutput().?;
+    defer sel.deinit(&s);
+    const contents = try s.selectionString(alloc, .{
+        .sel = sel,
+        .trim = false,
+    });
+    defer alloc.free(contents);
+    try testing.expectEqualStrings("error output", contents);
+}
+
+test "Screen: selectLastFailedOutput skips success" {
+    // selectLastFailedOutput should skip commands with exit_code 0
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 10, .max_scrollback = 0 });
+    defer s.deinit();
+
+    // First command - success
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("ok\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("ok output\n");
+
+    // Second command - success (no command_failed flag)
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("ok2\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("ok2 output\n");
+
+    // Mark second command row as NOT failed (simulates exit_code 0)
+    // Row already has command_failed = false by default
+
+    // selectLastFailedOutput should return null since there's no failed command
+    const result = s.selectLastFailedOutput();
+    try testing.expect(result == null);
+}
+
+test "Screen: selectLastFailedOutput multiple failed" {
+    // When multiple commands have failed, selectLastFailedOutput returns
+    // the most recent one (searches backward from bottom-right).
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 10, .max_scrollback = 0 });
+    defer s.deinit();
+
+    // Command 1 - failure
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("old\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("old error\n");
+
+    // Mark first command as failed
+    {
+        const row = s.pages.getRowAndCell(0, 2).row;
+        row.command_failed = true;
+    }
+
+    // Command 2 - failure
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("new\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("new error\n");
+
+    // Mark second command as failed (most recent)
+    {
+        const row = s.pages.getRowAndCell(0, s.pages.rows - 1).row;
+        row.command_failed = true;
+    }
+
+    // selectLastFailedOutput should find the most recent failed command
+    var sel = s.selectLastFailedOutput().?;
+    defer sel.deinit(&s);
+    const contents = try s.selectionString(alloc, .{
+        .sel = sel,
+        .trim = false,
+    });
+    defer alloc.free(contents);
+    try testing.expectEqualStrings("new error", contents);
+}
+
+test "Screen: selectLastOutputCrossPage multi-page output" {
+    // Output that spans multiple pages should be selectable as a single range.
+    // This tests the cross-page traversal via promptIterator.
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 5, .rows = 5, .max_scrollback = 50 });
+    defer s.deinit();
+
+    // Fill first page
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("cmd\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("AAAA\nBBBB\nCCCC\nDDDD\n");
+
+    // Prompt on second "page" (scrollback creates new page)
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("cmd2\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("EEEE\n");
+
+    // Cursor at bottom - should find output from cmd2
+    var sel = s.selectLastOutputCrossPage().?;
+    defer sel.deinit(&s);
+    const contents = try s.selectionString(alloc, .{
+        .sel = sel,
+        .trim = false,
+    });
+    defer alloc.free(contents);
+    try testing.expectEqualStrings("EEEE", contents);
+}
+
+test "Screen: command_failed flag from cursor page_row" {
+    // command_failed is a row-level flag set when a command ends with non-zero exit code.
+    // This tests that the flag can be inspected on rows.
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 5, .max_scrollback = 0 });
+    defer s.deinit();
+
+    // Write a command and mark its row as failed
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("fail\n");
+
+    // Get the row where the command ended
+    const row = s.pages.getRowAndCell(0, 0).row;
+    try testing.expect(row.command_failed == false);
+
+    // Now simulate setting command_failed (as Terminal.zig does on OSC 133 D;exit_code)
+    row.command_failed = true;
+    try testing.expect(row.command_failed == true);
 }
 
 test "Screen: selectionString basic" {

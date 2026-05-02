@@ -1970,7 +1970,11 @@ pub const Row = packed struct(u64) {
     /// screen.
     dirty: bool = false,
 
-    _padding: u23 = 0,
+    /// True if the command that ended on this row (via OSC 133 D) had
+    /// a non-zero exit code. Used to render a subtle failure indicator.
+    command_failed: bool = false,
+
+    _padding: u22 = 0,
 
     /// The semantic prompt state of the row. See `semantic_prompt`.
     pub const SemanticPrompt = enum(u2) {

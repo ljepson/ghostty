@@ -1297,6 +1297,13 @@ pub fn semanticPrompt(
             // its reasonable at this point to reset our semantic content
             // state but the spec doesn't really say what to do.
             self.screens.active.cursorSetSemanticContent(.output);
+
+            // Mark the row as having a failed command if exit code is non-zero.
+            if (cmd.readOption(.exit_code)) |exit_code| {
+                if (exit_code != 0) {
+                    self.screens.active.cursor.page_row.command_failed = true;
+                }
+            }
         },
     }
 }
@@ -13139,4 +13146,133 @@ test "Terminal: deleteLines wide char at right margin with full clear" {
     // and the orphaned spacer_tail at col 39 triggers a page integrity
     // violation in clearCells.
     try t.scrollUp(t.rows);
+}
+
+test "Terminal: end_command sets command_failed on non-zero exit" {
+    // OSC 133 D (end_command) with exit_code != 0 should set command_failed
+    // on the current row. This is how shell integration marks failed commands.
+    const alloc = testing.allocator;
+    var t = try init(alloc, .{ .cols = 10, .rows = 5 });
+    defer t.deinit(alloc);
+
+    // Start a prompt and write a command
+    try t.semanticPrompt(.init(.fresh_line_new_prompt));
+    for ("$ ") |c| try t.print(c);
+    try t.semanticPrompt(.init(.end_prompt_start_input));
+    for ("fail_cmd") |c| try t.print(c);
+
+    // End the command with exit code 1 (failure)
+    try t.semanticPrompt(.{
+        .action = .end_command,
+        .options_unvalidated = "1", // exit_code = 1
+    });
+
+    // The row should now have command_failed set
+    {
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{
+            .x = t.screens.active.cursor.x - 1,
+            .y = t.screens.active.cursor.y,
+        } }).?;
+        try testing.expect(list_cell.row.command_failed);
+    }
+}
+
+test "Terminal: end_command does not set command_failed on zero exit" {
+    // OSC 133 D (end_command) with exit_code = 0 should NOT set command_failed.
+    // Only non-zero exit codes should mark the command as failed.
+    const alloc = testing.allocator;
+    var t = try init(alloc, .{ .cols = 10, .rows = 5 });
+    defer t.deinit(alloc);
+
+    // Start a prompt and write a command
+    try t.semanticPrompt(.init(.fresh_line_new_prompt));
+    for ("$ ") |c| try t.print(c);
+    try t.semanticPrompt(.init(.end_prompt_start_input));
+    for ("ok_cmd") |c| try t.print(c);
+
+    // End the command with exit code 0 (success)
+    try t.semanticPrompt(.{
+        .action = .end_command,
+        .options_unvalidated = "0", // exit_code = 0
+    });
+
+    // The row should NOT have command_failed set
+    {
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{
+            .x = t.screens.active.cursor.x - 1,
+            .y = t.screens.active.cursor.y,
+        } }).?;
+        try testing.expect(!list_cell.row.command_failed);
+    }
+}
+
+test "Terminal: end_command with exit code and aid" {
+    // OSC 133 D can include both exit_code and aid options.
+    // command_failed should be set based on exit_code only.
+    const alloc = testing.allocator;
+    var t = try init(alloc, .{ .cols = 10, .rows = 5 });
+    defer t.deinit(alloc);
+
+    // Start a prompt and write a command
+    try t.semanticPrompt(.init(.fresh_line_new_prompt));
+    for ("$ ") |c| try t.print(c);
+    try t.semanticPrompt(.init(.end_prompt_start_input));
+    for ("status") |c| try t.print(c);
+
+    // End with exit_code=127 and aid (shell history ID)
+    try t.semanticPrompt(.{
+        .action = .end_command,
+        .options_unvalidated = "127;aid=42",
+    });
+
+    // The row should have command_failed set (127 != 0)
+    {
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{
+            .x = t.screens.active.cursor.x - 1,
+            .y = t.screens.active.cursor.y,
+        } }).?;
+        try testing.expect(list_cell.row.command_failed);
+    }
+}
+
+test "Terminal: end_command multiple commands track failed state" {
+    // Multiple commands where some fail and some succeed.
+    // Each command should have its own command_failed state tracked correctly.
+    const alloc = testing.allocator;
+    var t = try init(alloc, .{ .cols = 10, .rows = 10 });
+    defer t.deinit(alloc);
+
+    // Command 1 - success
+    try t.semanticPrompt(.init(.fresh_line_new_prompt));
+    for ("$ ") |c| try t.print(c);
+    try t.semanticPrompt(.init(.end_prompt_start_input));
+    for ("true") |c| try t.print(c);
+    try t.semanticPrompt(.{
+        .action = .end_command,
+        .options_unvalidated = "0",
+    });
+
+    // Command 2 - failure
+    try t.semanticPrompt(.init(.fresh_line_new_prompt));
+    for ("$ ") |c| try t.print(c);
+    try t.semanticPrompt(.init(.end_prompt_start_input));
+    for ("false") |c| try t.print(c);
+    try t.semanticPrompt(.{
+        .action = .end_command,
+        .options_unvalidated = "1",
+    });
+
+    // Move cursor to verify command 1 row is not failed
+    t.setCursorPos(0, 0);
+    {
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{ .x = 0, .y = 0 } }).?;
+        try testing.expect(!list_cell.row.command_failed);
+    }
+
+    // Move cursor to verify command 2 row is failed
+    t.setCursorPos(0, 3);
+    {
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{ .x = 0, .y = 3 } }).?;
+        try testing.expect(list_cell.row.command_failed);
+    }
 }

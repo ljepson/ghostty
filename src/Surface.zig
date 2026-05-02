@@ -29,6 +29,8 @@ const termio = @import("termio.zig");
 const font = @import("font/main.zig");
 const Command = @import("Command.zig");
 const terminal = @import("terminal/main.zig");
+const PageList = terminal.PageList;
+const Pin = terminal.Pin;
 const configpkg = @import("config.zig");
 const Duration = configpkg.Config.Duration;
 const input = @import("input.zig");
@@ -5254,7 +5256,7 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             self.renderer_state.mutex.lock();
             defer self.renderer_state.mutex.unlock();
 
-            const sel = self.io.terminal.screens.active.selectLastOutput() orelse return false;
+            const sel = self.io.terminal.screens.active.selectLastOutputCrossPage() orelse return false;
             try self.copySelectionToClipboards(
                 sel,
                 &.{.standard},
@@ -5262,6 +5264,64 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             );
 
             return true;
+        },
+
+        .copy_last_failed_output => {
+            self.renderer_state.mutex.lock();
+            defer self.renderer_state.mutex.unlock();
+
+            const sel = self.io.terminal.screens.active.selectLastFailedOutput() orelse return false;
+            try self.copySelectionToClipboards(
+                sel,
+                &.{.standard},
+                .mixed,
+            );
+
+            return true;
+        },
+
+        .navigate_command => |dir| {
+            self.renderer_state.mutex.lock();
+            defer self.renderer_state.mutex.unlock();
+
+            const pages = &self.io.terminal.screens.active.pages;
+
+            // Determine starting pin based on direction.
+            // For previous: start just below top of viewport and search backward.
+            // For next: start at the top of viewport and search forward.
+            const start_pin: Pin = start: {
+                const tl = pages.getTopLeft(.viewport);
+                break :start switch (dir) {
+                    .previous => tl.down(1) orelse {
+                        // Already at the very top, can't go further back
+                        return false;
+                    },
+                    .next => tl,
+                };
+            };
+
+            // Search for the next/previous prompt with output
+            const direction: PageList.Direction = switch (dir) {
+                .previous => .left_up,
+                .next => .right_down,
+            };
+
+            var it = start_pin.promptIterator(direction, null);
+            while (it.next()) |prompt_pin| {
+                // Check if this prompt has output
+                if (pages.highlightSemanticContent(prompt_pin, .output)) |hl| {
+                    // Scroll to show this prompt's output
+                    pages.viewport_pin.* = hl.start;
+                    pages.viewport = .pin;
+                    pages.viewport_pin_row_offset = null;
+
+                    try self.queueRender();
+                    return true;
+                }
+            }
+
+            // No more prompts found in that direction
+            return false;
         },
 
         .copy_url_to_clipboard => {

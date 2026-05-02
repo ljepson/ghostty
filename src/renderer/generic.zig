@@ -2655,6 +2655,16 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                 },
             }
 
+            // Render a subtle left gutter stripe for failed command rows.
+            if (row.command_failed) {
+                self.cells.bgCell(y, 0).* = .{
+                    @intFromFloat(0.7 * 255),
+                    @intFromFloat(0.15 * 255),
+                    @intFromFloat(0.15 * 255),
+                    255,
+                };
+            }
+
             // Iterator of runs for shaping.
             var run_iter_opts: font.shape.RunOptions = .{
                 .grid = self.font_grid,

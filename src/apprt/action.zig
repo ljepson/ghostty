@@ -343,6 +343,19 @@ pub const Action = union(Key) {
     /// otherwise the terminal-set title.
     copy_title_to_clipboard,
 
+    /// Copy the output of the most recent failed command to the clipboard.
+    /// The command must have a non-zero exit code to be considered failed.
+    copy_last_failed_output,
+
+    /// Navigate to the previous or next command output in the scrollback.
+    navigate_command: NavigateCommand,
+
+    /// Direction for navigate_command.
+    pub const NavigateCommand = enum(c_int) {
+        previous,
+        next,
+    };
+
     /// Sync with: ghostty_action_tag_e
     pub const Key = enum(c_int) {
         quit,
@@ -410,6 +423,8 @@ pub const Action = union(Key) {
         search_selected,
         readonly,
         copy_title_to_clipboard,
+        copy_last_failed_output,
+        navigate_command,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

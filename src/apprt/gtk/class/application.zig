@@ -676,6 +676,10 @@ pub const Application = extern struct {
             .close_window => return Action.closeWindow(target),
 
             .copy_title_to_clipboard => return Action.copyTitleToClipboard(target),
+            .copy_last_failed_output => return Action.bindingAction(
+                target,
+                .copy_last_failed_output,
+            ),
 
             .config_change => try Action.configChange(
                 self,
@@ -705,6 +709,11 @@ pub const Application = extern struct {
             .mouse_visibility => Action.mouseVisibility(target, value),
 
             .move_tab => return Action.moveTab(target, value),
+
+            .navigate_command => return Action.bindingAction(
+                target,
+                .{ .navigate_command = @enumFromInt(@intFromEnum(value)) },
+            ),
 
             .new_split => return Action.newSplit(target, value),
 
@@ -2797,6 +2806,21 @@ const Action = struct {
             .app => return false,
             .surface => |surface| {
                 return surface.rt_surface.gobj().setReadonly(value);
+            },
+        }
+    }
+
+    pub fn bindingAction(target: apprt.Target, action: Binding.Action) bool {
+        switch (target) {
+            .app => {
+                log.warn("binding action to app is unexpected action={}", .{action});
+                return false;
+            },
+            .surface => |core| {
+                return core.performBindingAction(action) catch |err| {
+                    log.warn("error handling binding action: {}", .{err});
+                    return false;
+                };
             },
         }
     }

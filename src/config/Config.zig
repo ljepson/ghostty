@@ -6517,6 +6517,14 @@ pub const Keybinds = struct {
             );
         }
 
+        // Copy last failed command output
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'c' }, .mods = .{ .ctrl = true, .shift = true, .alt = true } },
+            .copy_last_failed_output,
+            .{ .performable = true },
+        );
+
         // Increase font size mapping for keyboards with dedicated plus keys (like german)
         // Note: this order matters below because the C API will only return
         // the last keybinding for a given action. The macOS app uses this to
@@ -6784,6 +6792,18 @@ pub const Keybinds = struct {
                 alloc,
                 .{ .key = .{ .physical = .arrow_down }, .mods = .{ .shift = true, .ctrl = true } },
                 .{ .jump_to_prompt = 1 },
+            );
+
+            // Navigate command output
+            try self.set.put(
+                alloc,
+                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .alt = true } },
+                .{ .navigate_command = .previous },
+            );
+            try self.set.put(
+                alloc,
+                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .alt = true } },
+                .{ .navigate_command = .next },
             );
 
             // Move tab
