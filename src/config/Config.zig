@@ -6925,6 +6925,13 @@ pub const Keybinds = struct {
             .toggle_command_palette,
         );
 
+        // Open Drift's session picker.
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = ';' }, .mods = inputpkg.ctrlOrSuper(.{}) },
+            .drift_open_session_picker,
+        );
+
         // Mac-specific keyboard bindings.
         if (comptime builtin.target.os.tag.isDarwin()) {
             try self.set.put(

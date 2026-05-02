@@ -371,6 +371,11 @@ pub const Window = extern struct {
             .init("paste", actionPaste, null),
             .init("reset", actionReset, null),
             .init("clear", actionClear, null),
+            .init("drift-open-session-picker", actionDriftOpenSessionPicker, null),
+            .init("drift-list-sessions", actionDriftListSessions, null),
+            .init("drift-detach-session", actionDriftDetachSession, null),
+            .init("drift-paste-clipboard", actionDriftPasteClipboard, null),
+            .init("drift-debug-dump", actionDriftDebugDump, null),
             // TODO: accept the surface that toggled the command palette
             .init("toggle-command-palette", actionToggleCommandPalette, null),
             .init("toggle-inspector", actionToggleInspector, null),
@@ -1925,6 +1930,46 @@ pub const Window = extern struct {
         self: *Window,
     ) callconv(.c) void {
         self.performBindingAction(.clear_screen);
+    }
+
+    fn actionDriftOpenSessionPicker(
+        _: *gio.SimpleAction,
+        _: ?*glib.Variant,
+        self: *Window,
+    ) callconv(.c) void {
+        self.performBindingAction(.drift_open_session_picker);
+    }
+
+    fn actionDriftListSessions(
+        _: *gio.SimpleAction,
+        _: ?*glib.Variant,
+        self: *Window,
+    ) callconv(.c) void {
+        self.performBindingAction(.drift_list_sessions);
+    }
+
+    fn actionDriftDetachSession(
+        _: *gio.SimpleAction,
+        _: ?*glib.Variant,
+        self: *Window,
+    ) callconv(.c) void {
+        self.performBindingAction(.drift_detach_session);
+    }
+
+    fn actionDriftPasteClipboard(
+        _: *gio.SimpleAction,
+        _: ?*glib.Variant,
+        self: *Window,
+    ) callconv(.c) void {
+        self.performBindingAction(.drift_paste_clipboard);
+    }
+
+    fn actionDriftDebugDump(
+        _: *gio.SimpleAction,
+        _: ?*glib.Variant,
+        self: *Window,
+    ) callconv(.c) void {
+        self.performBindingAction(.drift_debug_dump);
     }
 
     fn actionRingBell(

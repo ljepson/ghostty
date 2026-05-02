@@ -219,6 +219,37 @@ menu main_menu {
   }
 
   section {
+    submenu {
+      label: _("Drift");
+
+      item {
+        label: _("Open Session Picker");
+        action: "win.drift-open-session-picker";
+      }
+
+      item {
+        label: _("List Sessions");
+        action: "win.drift-list-sessions";
+      }
+
+      item {
+        label: _("Detach Session");
+        action: "win.drift-detach-session";
+      }
+
+      item {
+        label: _("Paste Local Clipboard");
+        action: "win.drift-paste-clipboard";
+      }
+
+      item {
+        label: _("Write Diagnostic Trace");
+        action: "win.drift-debug-dump";
+      }
+    }
+  }
+
+  section {
     item {
       label: _("Change Tab Title…");
       action: "win.prompt-tab-title";

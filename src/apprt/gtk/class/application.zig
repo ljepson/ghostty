@@ -1156,6 +1156,11 @@ pub const Application = extern struct {
         self.syncActionAccelerator("win.paste", .{ .paste_from_clipboard = {} });
         self.syncActionAccelerator("win.reset", .{ .reset = {} });
         self.syncActionAccelerator("win.clear", .{ .clear_screen = {} });
+        self.syncActionAccelerator("win.drift-open-session-picker", .drift_open_session_picker);
+        self.syncActionAccelerator("win.drift-list-sessions", .drift_list_sessions);
+        self.syncActionAccelerator("win.drift-detach-session", .drift_detach_session);
+        self.syncActionAccelerator("win.drift-paste-clipboard", .drift_paste_clipboard);
+        self.syncActionAccelerator("win.drift-debug-dump", .drift_debug_dump);
         self.syncActionAccelerator("win.prompt-title", .{ .prompt_surface_title = {} });
         self.syncActionAccelerator("split-tree.new-split::left", .{ .new_split = .left });
         self.syncActionAccelerator("split-tree.new-split::right", .{ .new_split = .right });
