@@ -147,13 +147,7 @@ template $GhosttyWindow: Adw.ApplicationWindow {
         }
       }
 
-      Box {
-        orientation: vertical;
-
-        $GhosttyDebugWarning {
-          visible: bind template.debug;
-        }
-
+      Overlay {
         Adw.ToastOverlay toast_overlay {
           Adw.TabView tab_view {
             notify::n-pages => $notify_n_pages();
@@ -166,6 +160,11 @@ template $GhosttyWindow: Adw.ApplicationWindow {
             menu-model: tab_context_menu;
             shortcuts: none;
           }
+        }
+
+        [overlay]
+        $GhosttyDebugWarning {
+          visible: bind template.debug;
         }
       }
     }

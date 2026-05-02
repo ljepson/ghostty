@@ -1,11 +1,19 @@
 using Gtk 4.0;
 
 template $GhosttyDebugWarning: Gtk.Box {
-  orientation: vertical;
+  halign: end;
+  valign: start;
+  margin-top: 8;
+  margin-end: 8;
+  can-target: false;
+  focusable: false;
 
   Gtk.Label {
-    label: _("⚠️ You're running a debug build of Ghostty! Performance will be degraded.");
-    margin-top: 10;
-    margin-bottom: 10;
+    styles [
+      "debug-watermark",
+    ]
+
+    label: _("Debug");
+    tooltip-text: _("Debug build: performance will be degraded.");
   }
 }

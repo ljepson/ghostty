@@ -70,6 +70,19 @@ label.resize-overlay {
 }
 
 /*
+ * Debug build watermark
+ */
+label.debug-watermark {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  opacity: 0.72;
+  outline-style: solid;
+  outline-color: #555555;
+  outline-width: 1px;
+}
+
+/*
  * GhosttyClipboardConfirmationDialog
  *
  * Based on boxed-list-separate:
