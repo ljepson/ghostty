@@ -2310,6 +2310,7 @@ const Action = struct {
             .working_directory = overrides.working_directory,
             .title = overrides.title,
         });
+        if (overrides.command == null) win.restoreDriftTabs();
 
         // Estimate the initial window size before presenting so the window
         // manager can position it correctly.

@@ -165,6 +165,9 @@ pub const Tab = extern struct {
         /// The manually overridden title from `promptTabTitle`.
         title_override: ?[:0]const u8 = null,
 
+        /// Stable Drift restore ID for this tab, if it is manifest-backed.
+        drift_restore_id: ?[:0]const u8 = null,
+
         /// The tooltip of this tab. This is usually bound to the active surface.
         tooltip: ?[:0]const u8 = null,
 
@@ -191,14 +194,19 @@ pub const Tab = extern struct {
         command: ?configpkg.Command = null,
         working_directory: ?[:0]const u8 = null,
         title: ?[:0]const u8 = null,
+        drift_restore_id: ?[:0]const u8 = null,
 
         pub const none: @This() = .{};
     }) *Self {
         const tab = gobject.ext.newInstance(Tab, .{});
+        const alloc = Application.default().allocator();
 
         const priv: *Private = tab.private();
 
         if (config) |c| priv.config = c.ref();
+        if (overrides.drift_restore_id) |id| {
+            priv.drift_restore_id = alloc.dupeZ(u8, id) catch null;
+        }
 
         // If our configuration is null then we get the configuration
         // from the application.
@@ -214,6 +222,7 @@ pub const Tab = extern struct {
             .command = overrides.command,
             .working_directory = overrides.working_directory,
             .title = overrides.title,
+            .drift_restore_id = overrides.drift_restore_id,
         }) catch |err| switch (err) {
             error.OutOfMemory => {
                 // TODO: We should make our "no surfaces" state more aesthetically
@@ -224,6 +233,10 @@ pub const Tab = extern struct {
         };
 
         return tab;
+    }
+
+    pub fn driftRestoreId(self: *Self) ?[:0]const u8 {
+        return self.private().drift_restore_id;
     }
 
     fn init(self: *Self, _: *Class) callconv(.c) void {
@@ -355,6 +368,10 @@ pub const Tab = extern struct {
         if (priv.title_override) |v| {
             glib.free(@ptrCast(@constCast(v)));
             priv.title_override = null;
+        }
+        if (priv.drift_restore_id) |v| {
+            Application.default().allocator().free(v);
+            priv.drift_restore_id = null;
         }
 
         gobject.Object.virtual_methods.finalize.call(

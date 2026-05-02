@@ -1,0 +1,250 @@
+const std = @import("std");
+
+const Allocator = std.mem.Allocator;
+const Config = @import("config.zig").Config;
+
+var cursor_mutex: std.Thread.Mutex = .{};
+var cursor_key: ?[]u8 = null;
+var cursor_next: usize = 0;
+
+pub fn enabled(config: *const Config) bool {
+    return config.@"session-backend" == .drift and config.@"drift-restore";
+}
+
+pub fn claimTabId(alloc: Allocator, config: *const Config) ![]const u8 {
+    cursor_mutex.lock();
+    defer cursor_mutex.unlock();
+
+    const key = try manifestKey(std.heap.page_allocator, config);
+    if (cursor_key) |current| {
+        if (!std.mem.eql(u8, current, key)) {
+            std.heap.page_allocator.free(current);
+            cursor_key = key;
+            cursor_next = 0;
+        } else {
+            std.heap.page_allocator.free(key);
+        }
+    } else {
+        cursor_key = key;
+        cursor_next = 0;
+    }
+
+    var manifest = try Manifest.load(alloc, config);
+    defer manifest.deinit(alloc);
+
+    const index = cursor_next;
+    cursor_next += 1;
+
+    if (index < manifest.ids.items.len) {
+        return try alloc.dupe(u8, manifest.ids.items[index]);
+    }
+
+    const id = try manifest.nextTabId(alloc);
+    errdefer alloc.free(id);
+    try manifest.ids.append(alloc, try alloc.dupe(u8, id));
+    try manifest.save(alloc, config);
+
+    return id;
+}
+
+pub fn restoreTabCount(alloc: Allocator, config: *const Config) !usize {
+    if (!enabled(config)) return 1;
+
+    var manifest = try Manifest.load(alloc, config);
+    defer manifest.deinit(alloc);
+
+    return @max(manifest.ids.items.len, 1);
+}
+
+pub fn removeTabId(alloc: Allocator, config: *const Config, id: []const u8) !void {
+    if (!enabled(config)) return;
+
+    cursor_mutex.lock();
+    defer cursor_mutex.unlock();
+
+    var manifest = try Manifest.load(alloc, config);
+    defer manifest.deinit(alloc);
+
+    for (manifest.ids.items, 0..) |candidate, index| {
+        if (!std.mem.eql(u8, candidate, id)) continue;
+
+        alloc.free(manifest.ids.orderedRemove(index));
+        if (cursor_next > index) cursor_next -= 1;
+        try manifest.save(alloc, config);
+        return;
+    }
+}
+
+const Manifest = struct {
+    ids: std.ArrayListUnmanaged([]const u8) = .empty,
+    next_id: usize = 1,
+
+    fn load(alloc: Allocator, config: *const Config) !Manifest {
+        const path = try manifestPath(alloc, config);
+        defer alloc.free(path);
+
+        const file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+            error.FileNotFound => return .{},
+            else => return err,
+        };
+        defer file.close();
+
+        const contents = try file.readToEndAlloc(alloc, 1024 * 64);
+        defer alloc.free(contents);
+
+        var result: Manifest = .{};
+        errdefer result.deinit(alloc);
+
+        var it = std.mem.splitScalar(u8, contents, '\n');
+        while (it.next()) |line_raw| {
+            const line = std.mem.trim(u8, line_raw, " \t\r");
+            if (line.len == 0) continue;
+            if (std.mem.startsWith(u8, line, "# next=")) {
+                result.next_id = std.fmt.parseInt(usize, line["# next=".len..], 10) catch result.next_id;
+                continue;
+            }
+            if (line[0] == '#') continue;
+
+            try result.ids.append(alloc, try alloc.dupe(u8, line));
+            result.noteId(line);
+        }
+
+        return result;
+    }
+
+    fn save(self: *const Manifest, alloc: Allocator, config: *const Config) !void {
+        const dir = try manifestDir(alloc);
+        defer alloc.free(dir);
+        try std.fs.cwd().makePath(dir);
+
+        const path = try manifestPath(alloc, config);
+        defer alloc.free(path);
+
+        var data: std.ArrayListUnmanaged(u8) = .empty;
+        defer data.deinit(alloc);
+
+        const writer = data.writer(alloc);
+        try writer.print("# ghostty drift restore manifest v1\n", .{});
+        try writer.print("# host={s}\n", .{config.@"drift-host"});
+        try writer.print("# prefix={s}\n", .{config.@"drift-session-prefix"});
+        try writer.print("# next={d}\n", .{self.next_id});
+        for (self.ids.items) |id| {
+            try writer.print("{s}\n", .{id});
+        }
+
+        try std.fs.cwd().writeFile(.{
+            .sub_path = path,
+            .data = data.items,
+        });
+    }
+
+    fn deinit(self: *Manifest, alloc: Allocator) void {
+        for (self.ids.items) |id| alloc.free(id);
+        self.ids.deinit(alloc);
+        self.* = .{};
+    }
+
+    fn nextTabId(self: *Manifest, alloc: Allocator) ![]const u8 {
+        while (true) {
+            const id = try std.fmt.allocPrint(alloc, "tab-{d}", .{self.next_id});
+            self.next_id += 1;
+
+            if (!self.contains(id)) return id;
+            alloc.free(id);
+        }
+    }
+
+    fn contains(self: *const Manifest, id: []const u8) bool {
+        for (self.ids.items) |candidate| {
+            if (std.mem.eql(u8, candidate, id)) return true;
+        }
+        return false;
+    }
+
+    fn noteId(self: *Manifest, id: []const u8) void {
+        if (!std.mem.startsWith(u8, id, "tab-")) return;
+        const n = std.fmt.parseInt(usize, id["tab-".len..], 10) catch return;
+        self.next_id = @max(self.next_id, n + 1);
+    }
+};
+
+fn manifestPath(alloc: Allocator, config: *const Config) ![]u8 {
+    const dir = try manifestDir(alloc);
+    defer alloc.free(dir);
+
+    const host = try sanitizeComponent(alloc, config.@"drift-host");
+    defer alloc.free(host);
+
+    const prefix = try sanitizeComponent(alloc, config.@"drift-session-prefix");
+    defer alloc.free(prefix);
+
+    const filename = try std.fmt.allocPrint(
+        alloc,
+        "{s}-{s}.manifest",
+        .{ host, prefix },
+    );
+    defer alloc.free(filename);
+
+    return std.fs.path.join(alloc, &.{ dir, filename });
+}
+
+fn manifestKey(alloc: Allocator, config: *const Config) ![]u8 {
+    return std.fmt.allocPrint(
+        alloc,
+        "{s}\n{s}",
+        .{ config.@"drift-host", config.@"drift-session-prefix" },
+    );
+}
+
+fn manifestDir(alloc: Allocator) ![]u8 {
+    if (std.process.getEnvVarOwned(alloc, "XDG_STATE_HOME")) |state_home| {
+        defer alloc.free(state_home);
+        return try std.fs.path.join(alloc, &.{ state_home, "ghostty", "drift-restore" });
+    } else |err| switch (err) {
+        error.EnvironmentVariableNotFound => {},
+        else => return err,
+    }
+
+    const home = try std.process.getEnvVarOwned(alloc, "HOME");
+    defer alloc.free(home);
+    return try std.fs.path.join(alloc, &.{ home, ".local", "state", "ghostty", "drift-restore" });
+}
+
+fn sanitizeComponent(alloc: Allocator, value: []const u8) ![]u8 {
+    var result = try alloc.alloc(u8, value.len);
+    errdefer alloc.free(result);
+
+    for (value, 0..) |c, i| {
+        result[i] = switch (c) {
+            'a'...'z', 'A'...'Z', '0'...'9', '.', '_', '-' => c,
+            else => '_',
+        };
+    }
+
+    return result;
+}
+
+test "sanitize manifest path component" {
+    const alloc = std.testing.allocator;
+    const value = try sanitizeComponent(alloc, "ghostty/source drift");
+    defer alloc.free(value);
+
+    try std.testing.expectEqualStrings("ghostty_source_drift", value);
+}
+
+test "manifest tab IDs are monotonic" {
+    const alloc = std.testing.allocator;
+
+    var manifest: Manifest = .{};
+    defer manifest.deinit(alloc);
+
+    for (&[_][]const u8{ "tab-1", "tab-3" }) |id| {
+        try manifest.ids.append(alloc, try alloc.dupe(u8, id));
+        manifest.noteId(id);
+    }
+
+    const next = try manifest.nextTabId(alloc);
+    defer alloc.free(next);
+
+    try std.testing.expectEqualStrings("tab-4", next);
+}

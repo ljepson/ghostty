@@ -465,6 +465,55 @@ const DerivedConfig = struct {
     }
 };
 
+fn driftSessionCommand(
+    alloc: Allocator,
+    config: *const configpkg.Config,
+    surface_id: u64,
+) !configpkg.Command {
+    const restore_id = config.@"drift-session-id" orelse
+        try std.fmt.allocPrint(alloc, "0x{x:0>16}", .{surface_id});
+    const session_name_raw = try std.fmt.allocPrint(alloc, "{s}:{s}", .{
+        config.@"drift-session-prefix",
+        restore_id,
+    });
+    const session_name = try alloc.dupeZ(u8, session_name_raw);
+    const surface_tag_raw = try std.fmt.allocPrint(
+        alloc,
+        "ghostty-surface-id=0x{x:0>16}",
+        .{surface_id},
+    );
+    const surface_tag = try alloc.dupeZ(u8, surface_tag_raw);
+    const restore_tag_raw = try std.fmt.allocPrint(
+        alloc,
+        "ghostty-restore-id={s}",
+        .{restore_id},
+    );
+    const restore_tag = try alloc.dupeZ(u8, restore_tag_raw);
+    const profile_tag_raw = try std.fmt.allocPrint(
+        alloc,
+        "ghostty-profile={s}",
+        .{config.@"drift-session-prefix"},
+    );
+    const profile_tag = try alloc.dupeZ(u8, profile_tag_raw);
+
+    const args = try alloc.alloc([:0]const u8, 13);
+    args[0] = "drift";
+    args[1] = "connect";
+    args[2] = config.@"drift-host";
+    args[3] = "--name";
+    args[4] = session_name;
+    args[5] = "--tag";
+    args[6] = "app=ghostty";
+    args[7] = "--tag";
+    args[8] = surface_tag;
+    args[9] = "--tag";
+    args[10] = restore_tag;
+    args[11] = "--tag";
+    args[12] = profile_tag;
+
+    return .{ .direct = args };
+}
+
 /// Create a new surface. This must be called from the main thread. The
 /// pointer to the memory for the surface must be provided and must be
 /// stable due to interfacing with various callbacks.
@@ -625,8 +674,8 @@ pub fn init(
         .config_conditional_state = app.config_conditional_state,
     };
 
-    // The command we're going to execute
-    const command: ?configpkg.Command = command: {
+    // The command we're going to execute.
+    const configured_command: ?configpkg.Command = command: {
         if (app.first) {
             if (config.@"initial-command") |command| {
                 break :command command;
@@ -634,6 +683,14 @@ pub fn init(
         }
         break :command config.command;
     };
+
+    var generated_command_arena = ArenaAllocator.init(alloc);
+    defer generated_command_arena.deinit();
+    const command: ?configpkg.Command = if (configured_command == null and
+        config.@"session-backend" == .drift)
+        try driftSessionCommand(generated_command_arena.allocator(), config, self.id)
+    else
+        configured_command;
 
     // Start our IO implementation
     // This separate block ({}) is important because our errdefers must

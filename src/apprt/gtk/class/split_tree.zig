@@ -208,6 +208,7 @@ pub const SplitTree = extern struct {
             command: ?configpkg.Command = null,
             working_directory: ?[:0]const u8 = null,
             title: ?[:0]const u8 = null,
+            drift_restore_id: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         },
@@ -219,6 +220,7 @@ pub const SplitTree = extern struct {
             .command = overrides.command,
             .working_directory = overrides.working_directory,
             .title = overrides.title,
+            .drift_restore_id = overrides.drift_restore_id,
         });
         defer surface.unref();
         _ = surface.refSink();

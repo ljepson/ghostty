@@ -709,6 +709,7 @@ pub const Surface = extern struct {
         overrides: struct {
             command: ?configpkg.Command = null,
             working_directory: ?[:0]const u8 = null,
+            drift_restore_id: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         } = .none,
@@ -720,6 +721,7 @@ pub const Surface = extern struct {
         command: ?configpkg.Command = null,
         working_directory: ?[:0]const u8 = null,
         title: ?[:0]const u8 = null,
+        drift_restore_id: ?[:0]const u8 = null,
 
         pub const none: @This() = .{};
     }) *Self {
@@ -731,6 +733,7 @@ pub const Surface = extern struct {
         priv.overrides = .{
             .command = if (overrides.command) |c| c.clone(alloc) catch null else null,
             .working_directory = if (overrides.working_directory) |wd| alloc.dupeZ(u8, wd) catch null else null,
+            .drift_restore_id = if (overrides.drift_restore_id) |id| alloc.dupeZ(u8, id) catch null else null,
         };
         return self;
     }
@@ -1939,6 +1942,10 @@ pub const Surface = extern struct {
         if (priv.overrides.working_directory) |wd| {
             alloc.free(wd);
             priv.overrides.working_directory = null;
+        }
+        if (priv.overrides.drift_restore_id) |id| {
+            alloc.free(id);
+            priv.overrides.drift_restore_id = null;
         }
 
         // Clean up key sequence and key table state
@@ -3375,6 +3382,9 @@ pub const Surface = extern struct {
             var wd_val: configpkg.WorkingDirectory = .{ .path = try config_alloc.dupe(u8, wd) };
             try wd_val.finalize(config_alloc);
             config.@"working-directory" = wd_val;
+        }
+        if (priv.overrides.drift_restore_id) |id| {
+            config.@"drift-session-id" = try config.arenaAlloc().dupeZ(u8, id);
         }
 
         // Properties that can impact surface init

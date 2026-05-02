@@ -14,6 +14,7 @@ const configpkg = @import("../../../config.zig");
 const TitlebarStyle = configpkg.Config.GtkTitlebarStyle;
 const input = @import("../../../input.zig");
 const CoreSurface = @import("../../../Surface.zig");
+const drift_restore = @import("../../../drift_restore.zig");
 const ext = @import("../ext.zig");
 const gtk_version = @import("../gtk_version.zig");
 const adw_version = @import("../adw_version.zig");
@@ -418,6 +419,24 @@ pub const Window = extern struct {
         );
     }
 
+    pub fn restoreDriftTabs(self: *Self) void {
+        const priv: *Private = self.private();
+        const config = if (priv.config) |v| v.get() else return;
+        if (!drift_restore.enabled(config)) return;
+
+        const count = drift_restore.restoreTabCount(Application.default().allocator(), config) catch |err| {
+            log.warn("unable to load Drift restore manifest err={}", .{err});
+            return;
+        };
+        if (count <= 1) return;
+
+        const selected = priv.tab_view.getSelectedPage();
+        for (1..count) |_| {
+            _ = self.newTabPage(null, .tab, .none);
+        }
+        if (selected) |page| priv.tab_view.setSelectedPage(page);
+    }
+
     fn newTabPage(
         self: *Self,
         parent_: ?*CoreSurface,
@@ -426,12 +445,33 @@ pub const Window = extern struct {
             command: ?configpkg.Command = null,
             working_directory: ?[:0]const u8 = null,
             title: ?[:0]const u8 = null,
+            drift_restore_id: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         },
     ) *adw.TabPage {
         const priv: *Private = self.private();
         const tab_view = priv.tab_view;
+        const alloc = Application.default().allocator();
+
+        const drift_restore_id = if (overrides.drift_restore_id) |id| id else id: {
+            if (overrides.command != null) break :id null;
+            const config = if (priv.config) |v| v.get() else break :id null;
+            if (!drift_restore.enabled(config)) break :id null;
+            if (config.command != null) break :id null;
+            if (config.@"initial-command" != null and Application.default().core().first) break :id null;
+
+            const claimed = drift_restore.claimTabId(alloc, config) catch |err| {
+                log.warn("unable to claim Drift restore tab ID err={}", .{err});
+                break :id null;
+            };
+            defer alloc.free(claimed);
+
+            break :id alloc.dupeZ(u8, claimed) catch null;
+        };
+        defer if (drift_restore_id) |id| {
+            if (overrides.drift_restore_id == null) alloc.free(id);
+        };
 
         // Create our new tab object
         const tab = Tab.new(
@@ -440,6 +480,7 @@ pub const Window = extern struct {
                 .command = overrides.command,
                 .working_directory = overrides.working_directory,
                 .title = overrides.title,
+                .drift_restore_id = drift_restore_id,
             },
         );
 
@@ -1395,6 +1436,9 @@ pub const Window = extern struct {
             log.warn("close confirmation called for non-existent page", .{});
             return;
         };
+        if (ext.getAncestor(Self, page.getChild().as(gtk.Widget))) |win| {
+            win.pruneDriftRestoreTab(page);
+        }
         tab_view.closePageFinish(page, @intFromBool(true));
     }
 
@@ -1425,6 +1469,7 @@ pub const Window = extern struct {
         // If the tab says it doesn't need confirmation then we go ahead
         // and close immediately.
         if (!tab.getNeedsConfirmQuit()) {
+            self.pruneDriftRestoreTab(page);
             priv.tab_view.closePageFinish(page, @intFromBool(true));
             return @intFromBool(true);
         }
@@ -1449,6 +1494,24 @@ pub const Window = extern struct {
         // Show it
         dialog.present(child);
         return @intFromBool(true);
+    }
+
+    fn pruneDriftRestoreTab(self: *Self, page: *adw.TabPage) void {
+        const priv = self.private();
+        const config = if (priv.config) |v| v.get() else return;
+        if (!drift_restore.enabled(config)) return;
+
+        const child = page.getChild();
+        const tab = gobject.ext.cast(Tab, child) orelse return;
+        const id = tab.driftRestoreId() orelse return;
+
+        drift_restore.removeTabId(
+            Application.default().allocator(),
+            config,
+            id,
+        ) catch |err| {
+            log.warn("unable to update Drift restore manifest err={}", .{err});
+        };
     }
 
     fn tabViewSelectedPage(

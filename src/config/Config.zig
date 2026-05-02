@@ -1161,6 +1161,55 @@ palette: Palette = .{},
 /// information.
 command: ?Command = null,
 
+/// Selects the process backend used for default terminal sessions.
+///
+/// The default `native` backend starts the configured shell or command directly
+/// in Ghostty's PTY. The `drift` backend starts the Drift CLI instead, using a
+/// Ghostty session name so the shell is owned by Drift. This lets the terminal
+/// process outlive the Ghostty surface; full automatic layout restore requires
+/// a separate Ghostty restore manifest.
+///
+/// Explicit launch commands such as `-e`, `initial-command`, or menu actions
+/// that provide their own command are still honored and are not wrapped by the
+/// Drift backend.
+///
+/// Available values:
+///
+///   * `native`
+///   * `drift`
+@"session-backend": SessionBackend = .native,
+
+/// Drift host alias used when `session-backend=drift`.
+///
+/// This must be a host known to Drift's own configuration, i.e. from
+/// `~/.config/drift/config.toml`, not from SSH config. In this fork the default
+/// is `zen`, which is the current local Drift daemon alias.
+@"drift-host": [:0]const u8 = "zen",
+
+/// Prefix used for Ghostty-created Drift session names.
+///
+/// New default terminal surfaces are launched as named Drift sessions in the
+/// form `<prefix>:<id>`. Without `drift-restore`, the ID is the runtime
+/// surface ID and is unique for the life of the Ghostty process. With
+/// `drift-restore`, the ID is a stable tab ID from Ghostty's local restore
+/// manifest, allowing a relaunch to reconnect the same Drift sessions.
+@"drift-session-prefix": [:0]const u8 = "ghostty",
+
+/// Persist and restore stable Drift tab IDs.
+///
+/// This only applies when `session-backend=drift` and Ghostty is launching the
+/// default terminal command. Ghostty records a small local manifest under the
+/// user state directory, restores the previous default tab count on GTK launch,
+/// and prunes entries when tabs are explicitly closed.
+@"drift-restore": bool = false,
+
+/// Explicit Drift session ID used by frontend restore integrations.
+///
+/// When set with `session-backend=drift`, Ghostty uses this value after
+/// `drift-session-prefix` instead of the runtime surface ID. GTK sets this
+/// from the restore manifest for the initial surface of a restored tab.
+@"drift-session-id": ?[:0]const u8 = null,
+
 /// This is the same as "command", but only applies to the first terminal
 /// surface created when Ghostty starts. Subsequent terminal surfaces will use
 /// the `command` configuration.
@@ -9084,6 +9133,12 @@ pub const GtkSingleInstance = enum {
     detect,
 
     pub const default: GtkSingleInstance = .detect;
+};
+
+/// See session-backend
+pub const SessionBackend = enum {
+    native,
+    drift,
 };
 
 /// See gtk-tabs-location
