@@ -2908,6 +2908,23 @@ pub fn selectOutput(self: *Screen, pin: Pin) ?Selection {
         );
     };
 
+    return self.selectOutputForPrompt(prompt_pin);
+}
+
+/// Select the most recent command output in the scrollback. The limits of the
+/// output are determined by semantic prompt information provided by shell
+/// integration.
+pub fn selectLastOutput(self: *Screen) ?Selection {
+    const br = self.pages.getBottomRight(.screen) orelse return null;
+    var it = br.promptIterator(.left_up, null);
+    while (it.next()) |prompt_pin| {
+        if (self.selectOutputForPrompt(prompt_pin)) |sel| return sel;
+    }
+
+    return null;
+}
+
+fn selectOutputForPrompt(self: *Screen, prompt_pin: Pin) ?Selection {
     // Grab our content
     var hl = self.pages.highlightSemanticContent(
         prompt_pin,
@@ -8796,6 +8813,41 @@ test "Screen: selectOutput" {
             .y = 8,
         } }).?) == null);
     }
+}
+
+test "Screen: selectLastOutput" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s = try init(alloc, .{ .cols = 10, .rows = 10, .max_scrollback = 0 });
+    defer s.deinit();
+
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("one\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("first\n");
+
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+    s.cursorSetSemanticContent(.{ .input = .clear_explicit });
+    try s.testWriteString("two\n");
+    s.cursorSetSemanticContent(.output);
+    try s.testWriteString("second\n");
+
+    // A fresh prompt with no output yet should be skipped.
+    s.cursorSetSemanticContent(.{ .prompt = .initial });
+    try s.testWriteString("$ ");
+
+    var sel = s.selectLastOutput().?;
+    defer sel.deinit(&s);
+    const contents = try s.selectionString(alloc, .{
+        .sel = sel,
+        .trim = false,
+    });
+    defer alloc.free(contents);
+    try testing.expectEqualStrings("second", contents);
 }
 
 test "Screen: selectionString basic" {

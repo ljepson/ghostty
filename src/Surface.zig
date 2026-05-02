@@ -4989,6 +4989,16 @@ fn showMouse(self: *Surface) void {
 /// NOTE: At the time of writing this comment, only previous/next tab
 /// will ever return false. We can expand this in the future if it becomes
 /// useful. We did previous/next tab so we could implement #498.
+fn writeStableInput(self: *Surface, data: []const u8) void {
+    self.queueIo(.{ .write_stable = data }, .unlocked);
+
+    self.renderer_state.mutex.lock();
+    defer self.renderer_state.mutex.unlock();
+    self.scrollToBottom() catch |err| {
+        log.warn("error scrolling to bottom err={}", .{err});
+    };
+}
+
 pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool {
     // Forward app-scoped actions to the app. Some app-scoped actions are
     // special-cased here because they do some special things when performed
@@ -5075,6 +5085,12 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
                 };
             }
         },
+
+        .drift_open_session_picker => self.writeStableInput("drift\r"),
+        .drift_list_sessions => self.writeStableInput("drift sessions\r"),
+        .drift_detach_session => self.writeStableInput("\r~."),
+        .drift_paste_clipboard => self.writeStableInput("\r~V"),
+        .drift_debug_dump => self.writeStableInput("\r~D"),
 
         .cursor_key => |ck| {
             // We send a different sequence depending on if we're
@@ -5232,6 +5248,20 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             }
 
             return false;
+        },
+
+        .copy_last_command_output => {
+            self.renderer_state.mutex.lock();
+            defer self.renderer_state.mutex.unlock();
+
+            const sel = self.io.terminal.screens.active.selectLastOutput() orelse return false;
+            try self.copySelectionToClipboards(
+                sel,
+                &.{.standard},
+                .mixed,
+            );
+
+            return true;
         },
 
         .copy_url_to_clipboard => {

@@ -141,6 +141,36 @@ fn actionCommands(action: Action.Key) []const Command {
             .description = "Reset the terminal to a clean state.",
         }},
 
+        .drift_open_session_picker => comptime &.{.{
+            .action = .drift_open_session_picker,
+            .title = "Drift: Open Session Picker",
+            .description = "Run Drift's interactive session picker in the current terminal.",
+        }},
+
+        .drift_list_sessions => comptime &.{.{
+            .action = .drift_list_sessions,
+            .title = "Drift: List Sessions",
+            .description = "List Drift sessions across configured hosts in the current terminal.",
+        }},
+
+        .drift_detach_session => comptime &.{.{
+            .action = .drift_detach_session,
+            .title = "Drift: Detach Session",
+            .description = "Send Drift's detach escape sequence to the active session.",
+        }},
+
+        .drift_paste_clipboard => comptime &.{.{
+            .action = .drift_paste_clipboard,
+            .title = "Drift: Paste Local Clipboard",
+            .description = "Send Drift's local clipboard paste escape sequence to the active session.",
+        }},
+
+        .drift_debug_dump => comptime &.{.{
+            .action = .drift_debug_dump,
+            .title = "Drift: Write Diagnostic Trace",
+            .description = "Ask the active Drift session to write a diagnostic trace bundle.",
+        }},
+
         .copy_to_clipboard => comptime &.{ .{
             .action = .{ .copy_to_clipboard = .mixed },
             .title = "Copy to Clipboard",
@@ -163,6 +193,12 @@ fn actionCommands(action: Action.Key) []const Command {
             .action = .copy_url_to_clipboard,
             .title = "Copy URL to Clipboard",
             .description = "Copy the URL under the cursor to the clipboard.",
+        }},
+
+        .copy_last_command_output => comptime &.{.{
+            .action = .copy_last_command_output,
+            .title = "Copy Last Command Output",
+            .description = "Copy the most recent shell-integration-delimited command output to the clipboard.",
         }},
 
         .copy_title_to_clipboard => comptime &.{.{

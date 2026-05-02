@@ -332,6 +332,21 @@ pub const Action = union(enum) {
     /// the error will currently only show up in logs.
     text: []const u8,
 
+    /// Open Drift's session picker in the current terminal.
+    drift_open_session_picker,
+
+    /// List Drift sessions in the current terminal.
+    drift_list_sessions,
+
+    /// Detach the active Drift session.
+    drift_detach_session,
+
+    /// Paste the local clipboard into the active Drift session.
+    drift_paste_clipboard,
+
+    /// Ask the active Drift session to write a diagnostic trace bundle.
+    drift_debug_dump,
+
     /// Send data to the pty depending on whether cursor key mode is enabled
     /// (`application`) or disabled (`normal`).
     cursor_key: CursorKey,
@@ -348,6 +363,9 @@ pub const Action = union(enum) {
 
     /// Copy the selected text to the clipboard.
     copy_to_clipboard: CopyToClipboard,
+
+    /// Copy the most recent shell-integration command output to the clipboard.
+    copy_last_command_output,
 
     /// Paste the contents of the default clipboard.
     paste_from_clipboard,
@@ -1316,6 +1334,11 @@ pub const Action = union(enum) {
             .csi,
             .esc,
             .text,
+            .drift_open_session_picker,
+            .drift_list_sessions,
+            .drift_detach_session,
+            .drift_paste_clipboard,
+            .drift_debug_dump,
             .cursor_key,
             .search,
             .navigate_search,
@@ -1324,6 +1347,7 @@ pub const Action = union(enum) {
             .end_search,
             .reset,
             .copy_to_clipboard,
+            .copy_last_command_output,
             .copy_url_to_clipboard,
             .copy_title_to_clipboard,
             .paste_from_clipboard,
@@ -4496,6 +4520,38 @@ test "parse: copy to clipboard default" {
         const binding = try parseSingle("a=copy_to_clipboard");
         try testing.expect(binding.action == .copy_to_clipboard);
         try testing.expectEqual(Action.CopyToClipboard.mixed, binding.action.copy_to_clipboard);
+    }
+}
+
+test "parse: copy last command output" {
+    const testing = std.testing;
+
+    const binding = try parseSingle("a=copy_last_command_output");
+    try testing.expect(binding.action == .copy_last_command_output);
+}
+
+test "parse: drift actions" {
+    const testing = std.testing;
+
+    {
+        const binding = try parseSingle("a=drift_open_session_picker");
+        try testing.expect(binding.action == .drift_open_session_picker);
+    }
+    {
+        const binding = try parseSingle("a=drift_list_sessions");
+        try testing.expect(binding.action == .drift_list_sessions);
+    }
+    {
+        const binding = try parseSingle("a=drift_detach_session");
+        try testing.expect(binding.action == .drift_detach_session);
+    }
+    {
+        const binding = try parseSingle("a=drift_paste_clipboard");
+        try testing.expect(binding.action == .drift_paste_clipboard);
+    }
+    {
+        const binding = try parseSingle("a=drift_debug_dump");
+        try testing.expect(binding.action == .drift_debug_dump);
     }
 }
 
