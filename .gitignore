@@ -9,6 +9,7 @@
 .flatpak-builder/
 zig-cache/
 .zig-cache/
+zig-pkg/
 zig-out/
 build-cmake/
 CMakeCache.txt
@@ -28,4 +29,3 @@ glad.zip
 /ghostty.qcow2
 
 vgcore.*
-
