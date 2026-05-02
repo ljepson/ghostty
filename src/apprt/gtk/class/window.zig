@@ -1937,7 +1937,7 @@ pub const Window = extern struct {
         _: ?*glib.Variant,
         self: *Window,
     ) callconv(.c) void {
-        self.performBindingAction(.drift_open_session_picker);
+        self.openDriftTab(.{ .direct = &.{"drift"} }, "Drift");
     }
 
     fn actionDriftListSessions(
@@ -1945,7 +1945,7 @@ pub const Window = extern struct {
         _: ?*glib.Variant,
         self: *Window,
     ) callconv(.c) void {
-        self.performBindingAction(.drift_list_sessions);
+        self.openDriftTab(.{ .direct = &.{ "drift", "sessions" } }, "Drift Sessions");
     }
 
     fn actionDriftDetachSession(
@@ -1970,6 +1970,21 @@ pub const Window = extern struct {
         self: *Window,
     ) callconv(.c) void {
         self.performBindingAction(.drift_debug_dump);
+    }
+
+    fn openDriftTab(
+        self: *Window,
+        command: configpkg.Command,
+        title: [:0]const u8,
+    ) void {
+        _ = self.newTabPage(
+            if (self.getActiveSurface()) |v| v.core() else null,
+            .tab,
+            .{
+                .command = command,
+                .title = title,
+            },
+        );
     }
 
     fn actionRingBell(
