@@ -264,10 +264,12 @@ pub fn constraintWidth(
     // width will always be 2, so we can just return early.
     if (grid_width > 1) return grid_width;
 
-    // We allow "symbol-like" glyphs to extend to 2 cells wide if there's
-    // space, and if the previous glyph wasn't also a symbol. So if this
-    // codepoint isn't a symbol then we can return the grid width.
-    if (!isSymbol(cp)) return grid_width;
+    // We allow Nerd Font / PUA style symbols to extend to 2 cells wide if
+    // there's space, and if the previous glyph wasn't also a symbol. Ordinary
+    // Unicode symbols such as arrows and dingbats should stay in their normal
+    // wcwidth-sized grid cell; expanding them makes terminal UI text look
+    // misaligned.
+    if (!canUseWideSymbolConstraint(cp)) return grid_width;
 
     // If we are at the end of the screen it must be constrained to one cell.
     if (x == cols - 1) return 1;
@@ -313,6 +315,20 @@ fn isSpace(char: u21) bool {
 /// as box drawing characters, block elements, and Powerline glyphs.
 fn isGraphicsElement(char: u21) bool {
     return isBoxDrawing(char) or isBlockElement(char) or isLegacyComputing(char) or isPowerline(char);
+}
+
+fn canUseWideSymbolConstraint(char: u21) bool {
+    return isPrivateUse(char) or isGraphicsElement(char);
+}
+
+fn isPrivateUse(char: u21) bool {
+    return switch (char) {
+        0xE000...0xF8FF,
+        0xF0000...0xFFFFD,
+        0x100000...0x10FFFD,
+        => true,
+        else => false,
+    };
 }
 
 // Returns true if the codepoint is a box drawing character.
@@ -674,6 +690,47 @@ test "Cell constraint widths" {
         try testing.expectEqual(2, constraintWidth(
             state.row_data.get(0).cells.items(.raw),
             0,
+            state.cols,
+        ));
+    }
+
+    // ordinary Unicode symbol->space: 1
+    {
+        t.fullReset();
+        s.nextSlice("✻ z");
+        try state.update(alloc, &t);
+        try testing.expectEqual(1, constraintWidth(
+            state.row_data.get(0).cells.items(.raw),
+            0,
+            state.cols,
+        ));
+    }
+
+    // ordinary Unicode arrow->space: 1
+    {
+        t.fullReset();
+        s.nextSlice("↳ a");
+        try state.update(alloc, &t);
+        try testing.expectEqual(1, constraintWidth(
+            state.row_data.get(0).cells.items(.raw),
+            0,
+            state.cols,
+        ));
+    }
+
+    // adjacent ordinary Unicode symbols stay one cell each
+    {
+        t.fullReset();
+        s.nextSlice("⏵⏵ ");
+        try state.update(alloc, &t);
+        try testing.expectEqual(1, constraintWidth(
+            state.row_data.get(0).cells.items(.raw),
+            0,
+            state.cols,
+        ));
+        try testing.expectEqual(1, constraintWidth(
+            state.row_data.get(0).cells.items(.raw),
+            1,
             state.cols,
         ));
     }
