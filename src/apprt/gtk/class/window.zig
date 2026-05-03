@@ -257,6 +257,11 @@ pub const Window = extern struct {
         /// setup by `setup-menu`.
         context_menu_page: ?*adw.TabPage = null,
 
+        /// True while the whole window is closing. Drift restore IDs should
+        /// survive window/application shutdown and only be pruned for explicit
+        /// tab closes.
+        preserve_drift_restore_on_close: bool = false,
+
         // Template bindings
         tab_overview: *adw.TabOverview,
         tab_bar: *adw.TabBar,
@@ -650,6 +655,11 @@ pub const Window = extern struct {
         const tab_overview = priv.tab_overview;
         const is_open = tab_overview.getOpen() != 0;
         tab_overview.setOpen(@intFromBool(!is_open));
+    }
+
+    pub fn destroyPreservingDriftRestore(self: *Self) void {
+        self.private().preserve_drift_restore_on_close = true;
+        self.as(gtk.Window).destroy();
     }
 
     /// Toggle the visible property.
@@ -1412,7 +1422,7 @@ pub const Window = extern struct {
             return @intFromBool(true);
         }
 
-        self.as(gtk.Window).destroy();
+        self.destroyPreservingDriftRestore();
         return @intFromBool(false);
     }
 
@@ -1420,7 +1430,7 @@ pub const Window = extern struct {
         _: *CloseConfirmationDialog,
         self: *Self,
     ) callconv(.c) void {
-        self.as(gtk.Window).destroy();
+        self.destroyPreservingDriftRestore();
     }
 
     fn closeConfirmationCloseTab(
@@ -1467,7 +1477,9 @@ pub const Window = extern struct {
         // If the tab says it doesn't need confirmation then we go ahead
         // and close immediately.
         if (!tab.getNeedsConfirmQuit()) {
-            self.pruneDriftRestoreTab(page);
+            if (!priv.preserve_drift_restore_on_close) {
+                self.pruneDriftRestoreTab(page);
+            }
             priv.tab_view.closePageFinish(page, @intFromBool(true));
             return @intFromBool(true);
         }

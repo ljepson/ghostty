@@ -654,8 +654,8 @@ pub const Application = extern struct {
                 // gtk.Window as a property that we don't own and it later
                 // tries to free on its own. I think this is probably a bug in
                 // the fcitx ime widget but still, we don't want a double free!
-                if (gobject.ext.isA(window, Window)) {
-                    window.destroy();
+                if (gobject.ext.cast(Window, window)) |ghostty_window| {
+                    ghostty_window.destroyPreservingDriftRestore();
                 }
             }
         }.callback, null);
