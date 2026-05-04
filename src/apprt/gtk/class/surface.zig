@@ -2026,6 +2026,15 @@ pub const Surface = extern struct {
         return self.private().focused;
     }
 
+    pub fn driftRestoreId(self: *Self) ?[:0]const u8 {
+        return self.private().overrides.drift_restore_id;
+    }
+
+    pub fn getConfig(self: *Self) ?*const configpkg.Config {
+        const priv = self.private();
+        return if (priv.config) |config| config.get() else null;
+    }
+
     /// Change the configuration for this surface.
     pub fn setConfig(self: *Self, config: *Config) void {
         const priv = self.private();

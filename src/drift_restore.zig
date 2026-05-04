@@ -47,6 +47,20 @@ pub fn claimTabId(alloc: Allocator, config: *const Config) ![]const u8 {
     return id;
 }
 
+pub fn claimSplitId(alloc: Allocator, config: *const Config, tab_id: []const u8) ![]const u8 {
+    cursor_mutex.lock();
+    defer cursor_mutex.unlock();
+
+    var manifest = try Manifest.load(alloc, config);
+    defer manifest.deinit(alloc);
+
+    const id = try manifest.nextSplitId(alloc, tab_id);
+    errdefer alloc.free(id);
+    try manifest.save(alloc, config);
+
+    return id;
+}
+
 pub fn restoreTabCount(alloc: Allocator, config: *const Config) !usize {
     if (!enabled(config)) return 1;
 
@@ -78,6 +92,7 @@ pub fn removeTabId(alloc: Allocator, config: *const Config, id: []const u8) !voi
 const Manifest = struct {
     ids: std.ArrayListUnmanaged([]const u8) = .empty,
     next_id: usize = 1,
+    next_split_id: usize = 1,
 
     fn load(alloc: Allocator, config: *const Config) !Manifest {
         const path = try manifestPath(alloc, config);
@@ -101,6 +116,10 @@ const Manifest = struct {
             if (line.len == 0) continue;
             if (std.mem.startsWith(u8, line, "# next=")) {
                 result.next_id = std.fmt.parseInt(usize, line["# next=".len..], 10) catch result.next_id;
+                continue;
+            }
+            if (std.mem.startsWith(u8, line, "# next-split=")) {
+                result.next_split_id = std.fmt.parseInt(usize, line["# next-split=".len..], 10) catch result.next_split_id;
                 continue;
             }
             if (line[0] == '#') continue;
@@ -128,6 +147,7 @@ const Manifest = struct {
         try writer.print("# host={s}\n", .{config.@"drift-host"});
         try writer.print("# prefix={s}\n", .{config.@"drift-session-prefix"});
         try writer.print("# next={d}\n", .{self.next_id});
+        try writer.print("# next-split={d}\n", .{self.next_split_id});
         for (self.ids.items) |id| {
             try writer.print("{s}\n", .{id});
         }
@@ -152,6 +172,15 @@ const Manifest = struct {
             if (!self.contains(id)) return id;
             alloc.free(id);
         }
+    }
+
+    fn nextSplitId(self: *Manifest, alloc: Allocator, tab_id: []const u8) ![]const u8 {
+        const id = try std.fmt.allocPrint(alloc, "{s}-split-{d}", .{
+            tab_id,
+            self.next_split_id,
+        });
+        self.next_split_id += 1;
+        return id;
     }
 
     fn contains(self: *const Manifest, id: []const u8) bool {
@@ -247,4 +276,20 @@ test "manifest tab IDs are monotonic" {
     defer alloc.free(next);
 
     try std.testing.expectEqualStrings("tab-4", next);
+}
+
+test "manifest split IDs are monotonic and not tab entries" {
+    const alloc = std.testing.allocator;
+
+    var manifest: Manifest = .{};
+    defer manifest.deinit(alloc);
+
+    const first = try manifest.nextSplitId(alloc, "tab-9");
+    defer alloc.free(first);
+    const second = try manifest.nextSplitId(alloc, "tab-9");
+    defer alloc.free(second);
+
+    try std.testing.expectEqualStrings("tab-9-split-1", first);
+    try std.testing.expectEqualStrings("tab-9-split-2", second);
+    try std.testing.expectEqual(@as(usize, 0), manifest.ids.items.len);
 }

@@ -8,6 +8,7 @@ const gobject = @import("gobject");
 const gtk = @import("gtk");
 
 const configpkg = @import("../../../config.zig");
+const drift_restore = @import("../../../drift_restore.zig");
 const apprt = @import("../../../apprt.zig");
 const ext = @import("../ext.zig");
 const gresource = @import("../build/gresource.zig");
@@ -214,13 +215,20 @@ pub const SplitTree = extern struct {
         },
     ) Allocator.Error!void {
         const alloc = Application.default().allocator();
+        const drift_restore_id = if (overrides.drift_restore_id) |id| id else id: {
+            if (overrides.command != null) break :id null;
+            break :id self.claimDriftSplitId(parent_);
+        };
+        defer if (overrides.drift_restore_id == null) {
+            if (drift_restore_id) |id| alloc.free(id);
+        };
 
         // Create our new surface.
         const surface: *Surface = .new(.{
             .command = overrides.command,
             .working_directory = overrides.working_directory,
             .title = overrides.title,
-            .drift_restore_id = overrides.drift_restore_id,
+            .drift_restore_id = drift_restore_id,
         });
         defer surface.unref();
         _ = surface.refSink();
@@ -277,6 +285,34 @@ pub const SplitTree = extern struct {
 
         // Replace our tree
         self.setTree(&new_tree);
+    }
+
+    fn claimDriftSplitId(self: *Self, parent_: ?*Surface) ?[:0]const u8 {
+        const parent = parent_ orelse return null;
+        const config = parent.getConfig() orelse return null;
+        if (!drift_restore.enabled(config)) return null;
+
+        const tab_id = self.driftRestoreTabId() orelse return null;
+        const alloc = Application.default().allocator();
+        const claimed = drift_restore.claimSplitId(alloc, config, tab_id) catch |err| {
+            log.warn("unable to claim Drift split ID err={}", .{err});
+            return null;
+        };
+        defer alloc.free(claimed);
+
+        return alloc.dupeZ(u8, claimed) catch null;
+    }
+
+    fn driftRestoreTabId(self: *Self) ?[:0]const u8 {
+        const tree = self.getTree() orelse return null;
+        var it = tree.iterator();
+        while (it.next()) |entry| {
+            const id = entry.view.driftRestoreId() orelse continue;
+            if (!std.mem.startsWith(u8, id, "tab-")) continue;
+            if (std.mem.indexOf(u8, id, "-split-") != null) continue;
+            return id;
+        }
+        return null;
     }
 
     pub fn resize(
