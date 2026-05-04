@@ -1,8 +1,8 @@
 ---
 name: writing-commit-messages
 description: >-
-  Writes Git commit messages. Activates when the user asks to write
-  a commit message, draft a commit message, or similar.
+  Use when writing Git commit messages, drafting commit messages, or
+  applying commits that need to follow this repository's style.
 ---
 
 # Writing Commit Messages
