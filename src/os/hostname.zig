@@ -7,6 +7,26 @@ pub const LocalHostnameValidationError = error{
     Unexpected,
 };
 
+/// Returns the local machine hostname.
+pub fn get(alloc: std.mem.Allocator) ![]u8 {
+    switch (builtin.os.tag) {
+        .windows => {
+            const windows = @import("windows.zig");
+            var buf: [256:0]u8 = undefined;
+            var nSize: windows.DWORD = buf.len;
+            if (windows.exp.kernel32.GetComputerNameA(&buf, &nSize) == 0) {
+                return error.GetComputerNameFailed;
+            }
+            return try alloc.dupe(u8, buf[0..nSize]);
+        },
+        else => {
+            var buf: [posix.HOST_NAME_MAX]u8 = undefined;
+            const hostname = try posix.gethostname(&buf);
+            return try alloc.dupe(u8, hostname);
+        },
+    }
+}
+
 /// Validates a hostname according to [RFC 1123](https://www.rfc-editor.org/rfc/rfc1123)
 ///
 /// std.net.isValidHostname is (currently) too generous. It considers strings like

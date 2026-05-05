@@ -98,6 +98,19 @@ pub const StreamHandler = struct {
         }
     }
 
+    pub fn vtRaw(self: *StreamHandler, action: terminal.Parser.Action) !bool {
+        switch (action) {
+            .osc_dispatch => |cmd| switch (cmd) {
+                .context_signal => |ctx| {
+                    try self.contextSignal(ctx);
+                    return true;
+                },
+                else => return false,
+            },
+            else => return false,
+        }
+    }
+
     /// This queues a render operation with the renderer thread. The render
     /// isn't guaranteed to happen immediately but it will happen as soon as
     /// practical.
@@ -1203,6 +1216,35 @@ pub const StreamHandler = struct {
         if (!self.seen_title) {
             try self.windowTitle(path);
             self.seen_title = false;
+        }
+    }
+
+    fn contextSignal(
+        self: *StreamHandler,
+        cmd: anytype,
+    ) !void {
+        if (cmd.readOption(.comm)) |comm| {
+            if (!std.mem.eql(u8, comm, "drift")) return;
+        } else if (!std.mem.startsWith(u8, cmd.id, "drift-")) {
+            return;
+        }
+
+        switch (cmd.action) {
+            .start => {
+                const host = cmd.readOption(.targethost) orelse return;
+                if (apprt.surface.Message.WriteReq.init(self.alloc, host)) |req| {
+                    self.surfaceMessageWriter(.{ .drift_host_change = req });
+                } else |err| {
+                    log.warn("error notifying surface of Drift host change err={}", .{err});
+                }
+            },
+            .end => {
+                if (apprt.surface.Message.WriteReq.init(self.alloc, "")) |req| {
+                    self.surfaceMessageWriter(.{ .drift_host_change = req });
+                } else |err| {
+                    log.warn("error clearing Drift host context err={}", .{err});
+                }
+            },
         }
     }
 

@@ -471,6 +471,7 @@ fn driftSessionCommand(
     surface_id: u64,
     child_command: ?*const configpkg.Command,
 ) !configpkg.Command {
+    const drift_host = try effectiveDriftHost(alloc, config.@"drift-host");
     const restore_id = config.@"drift-session-id" orelse
         try std.fmt.allocPrint(alloc, "0x{x:0>16}", .{surface_id});
     const session_name_raw = try std.fmt.allocPrint(alloc, "{s}:{s}", .{
@@ -501,7 +502,7 @@ fn driftSessionCommand(
     try args.appendSlice(alloc, &.{
         "drift",
         "connect",
-        config.@"drift-host",
+        drift_host,
         "--name",
         session_name,
         "--tag",
@@ -525,6 +526,13 @@ fn driftSessionCommand(
     }
 
     return .{ .direct = try args.toOwnedSlice(alloc) };
+}
+
+fn effectiveDriftHost(alloc: Allocator, configured: [:0]const u8) ![:0]const u8 {
+    if (configured.len > 0) return configured;
+    const hostname = try internal_os.hostname.get(alloc);
+    defer alloc.free(hostname);
+    return try alloc.dupeZ(u8, hostname);
 }
 
 /// Create a new surface. This must be called from the main thread. The
@@ -1154,6 +1162,21 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
                 .pwd,
                 .{ .pwd = str },
             );
+        },
+
+        .drift_host_change => |w| {
+            defer w.deinit();
+
+            const host = w.slice();
+            if (comptime @hasDecl(apprt.runtime.Surface, "setDriftHost")) {
+                if (host.len == 0) {
+                    self.rt_surface.setDriftHost(null);
+                } else {
+                    const str = try self.alloc.dupeZ(u8, host);
+                    defer self.alloc.free(str);
+                    self.rt_surface.setDriftHost(str);
+                }
+            }
         },
 
         .close => self.close(),
@@ -5167,6 +5190,11 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
         .drift_detach_session => self.writeStableInput("\r~."),
         .drift_paste_clipboard => self.writeStableInput("\r~V"),
         .drift_debug_dump => self.writeStableInput("\r~D"),
+        .drift_attach_next => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .drift_attach_next,
+            {},
+        ),
 
         .cursor_key => |ck| {
             // We send a different sequence depending on if we're

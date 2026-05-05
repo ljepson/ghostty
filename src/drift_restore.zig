@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 const Config = @import("config.zig").Config;
+const internal_os = @import("os/main.zig");
 
 var cursor_mutex: std.Thread.Mutex = .{};
 var cursor_key: ?[]u8 = null;
@@ -11,11 +12,11 @@ pub fn enabled(config: *const Config) bool {
     return config.@"session-backend" == .drift and config.@"drift-restore";
 }
 
-pub fn claimTabId(alloc: Allocator, config: *const Config) ![]const u8 {
+pub fn claimTabId(alloc: Allocator, config: *const Config, drift_host: ?[]const u8) ![]const u8 {
     cursor_mutex.lock();
     defer cursor_mutex.unlock();
 
-    const key = try manifestKey(std.heap.page_allocator, config);
+    const key = try manifestKey(std.heap.page_allocator, config, drift_host);
     if (cursor_key) |current| {
         if (!std.mem.eql(u8, current, key)) {
             std.heap.page_allocator.free(current);
@@ -29,7 +30,7 @@ pub fn claimTabId(alloc: Allocator, config: *const Config) ![]const u8 {
         cursor_next = 0;
     }
 
-    var manifest = try Manifest.load(alloc, config);
+    var manifest = try Manifest.load(alloc, config, drift_host);
     defer manifest.deinit(alloc);
 
     const index = cursor_next;
@@ -42,21 +43,21 @@ pub fn claimTabId(alloc: Allocator, config: *const Config) ![]const u8 {
     const id = try manifest.nextTabId(alloc);
     errdefer alloc.free(id);
     try manifest.ids.append(alloc, try alloc.dupe(u8, id));
-    try manifest.save(alloc, config);
+    try manifest.save(alloc, config, drift_host);
 
     return id;
 }
 
-pub fn claimSplitId(alloc: Allocator, config: *const Config, tab_id: []const u8) ![]const u8 {
+pub fn claimSplitId(alloc: Allocator, config: *const Config, tab_id: []const u8, drift_host: ?[]const u8) ![]const u8 {
     cursor_mutex.lock();
     defer cursor_mutex.unlock();
 
-    var manifest = try Manifest.load(alloc, config);
+    var manifest = try Manifest.load(alloc, config, drift_host);
     defer manifest.deinit(alloc);
 
     const id = try manifest.nextSplitId(alloc, tab_id);
     errdefer alloc.free(id);
-    try manifest.save(alloc, config);
+    try manifest.save(alloc, config, drift_host);
 
     return id;
 }
@@ -64,19 +65,19 @@ pub fn claimSplitId(alloc: Allocator, config: *const Config, tab_id: []const u8)
 pub fn restoreTabCount(alloc: Allocator, config: *const Config) !usize {
     if (!enabled(config)) return 1;
 
-    var manifest = try Manifest.load(alloc, config);
+    var manifest = try Manifest.load(alloc, config, null);
     defer manifest.deinit(alloc);
 
     return @max(manifest.ids.items.len, 1);
 }
 
-pub fn removeTabId(alloc: Allocator, config: *const Config, id: []const u8) !void {
+pub fn removeTabId(alloc: Allocator, config: *const Config, id: []const u8, drift_host: ?[]const u8) !void {
     if (!enabled(config)) return;
 
     cursor_mutex.lock();
     defer cursor_mutex.unlock();
 
-    var manifest = try Manifest.load(alloc, config);
+    var manifest = try Manifest.load(alloc, config, drift_host);
     defer manifest.deinit(alloc);
 
     for (manifest.ids.items, 0..) |candidate, index| {
@@ -84,7 +85,7 @@ pub fn removeTabId(alloc: Allocator, config: *const Config, id: []const u8) !voi
 
         alloc.free(manifest.ids.orderedRemove(index));
         if (cursor_next > index) cursor_next -= 1;
-        try manifest.save(alloc, config);
+        try manifest.save(alloc, config, drift_host);
         return;
     }
 }
@@ -94,8 +95,8 @@ const Manifest = struct {
     next_id: usize = 1,
     next_split_id: usize = 1,
 
-    fn load(alloc: Allocator, config: *const Config) !Manifest {
-        const path = try manifestPath(alloc, config);
+    fn load(alloc: Allocator, config: *const Config, drift_host: ?[]const u8) !Manifest {
+        const path = try manifestPath(alloc, config, drift_host);
         defer alloc.free(path);
 
         const file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
@@ -131,12 +132,12 @@ const Manifest = struct {
         return result;
     }
 
-    fn save(self: *const Manifest, alloc: Allocator, config: *const Config) !void {
+    fn save(self: *const Manifest, alloc: Allocator, config: *const Config, drift_host: ?[]const u8) !void {
         const dir = try manifestDir(alloc);
         defer alloc.free(dir);
         try std.fs.cwd().makePath(dir);
 
-        const path = try manifestPath(alloc, config);
+        const path = try manifestPath(alloc, config, drift_host);
         defer alloc.free(path);
 
         var data: std.ArrayListUnmanaged(u8) = .empty;
@@ -144,7 +145,10 @@ const Manifest = struct {
 
         const writer = data.writer(alloc);
         try writer.print("# ghostty drift restore manifest v1\n", .{});
-        try writer.print("# host={s}\n", .{config.@"drift-host"});
+        const host = try effectiveHost(alloc, config, drift_host);
+        defer alloc.free(host);
+
+        try writer.print("# host={s}\n", .{host});
         try writer.print("# prefix={s}\n", .{config.@"drift-session-prefix"});
         try writer.print("# next={d}\n", .{self.next_id});
         try writer.print("# next-split={d}\n", .{self.next_split_id});
@@ -197,11 +201,14 @@ const Manifest = struct {
     }
 };
 
-fn manifestPath(alloc: Allocator, config: *const Config) ![]u8 {
+fn manifestPath(alloc: Allocator, config: *const Config, drift_host: ?[]const u8) ![]u8 {
     const dir = try manifestDir(alloc);
     defer alloc.free(dir);
 
-    const host = try sanitizeComponent(alloc, config.@"drift-host");
+    const host_raw = try effectiveHost(alloc, config, drift_host);
+    defer alloc.free(host_raw);
+
+    const host = try sanitizeComponent(alloc, host_raw);
     defer alloc.free(host);
 
     const prefix = try sanitizeComponent(alloc, config.@"drift-session-prefix");
@@ -217,12 +224,27 @@ fn manifestPath(alloc: Allocator, config: *const Config) ![]u8 {
     return std.fs.path.join(alloc, &.{ dir, filename });
 }
 
-fn manifestKey(alloc: Allocator, config: *const Config) ![]u8 {
+fn manifestKey(alloc: Allocator, config: *const Config, drift_host: ?[]const u8) ![]u8 {
+    const host = try effectiveHost(alloc, config, drift_host);
+    defer alloc.free(host);
+
     return std.fmt.allocPrint(
         alloc,
         "{s}\n{s}",
-        .{ config.@"drift-host", config.@"drift-session-prefix" },
+        .{ host, config.@"drift-session-prefix" },
     );
+}
+
+fn effectiveHost(alloc: Allocator, config: *const Config, drift_host: ?[]const u8) ![]u8 {
+    if (drift_host) |host| {
+        if (host.len > 0) return try alloc.dupe(u8, host);
+    }
+
+    if (config.@"drift-host".len > 0) {
+        return try alloc.dupe(u8, config.@"drift-host");
+    }
+
+    return try internal_os.hostname.get(alloc);
 }
 
 fn manifestDir(alloc: Allocator) ![]u8 {

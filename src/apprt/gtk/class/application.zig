@@ -689,6 +689,8 @@ pub const Application = extern struct {
 
             .desktop_notification => Action.desktopNotification(self, target, value),
 
+            .drift_attach_next => return Action.driftAttachNext(target),
+
             .equalize_splits => return Action.equalizeSplits(target),
 
             .goto_split => return Action.gotoSplit(target, value),
@@ -2244,6 +2246,27 @@ const Action = struct {
                 };
                 window.newTab(core);
                 return true;
+            },
+        }
+    }
+
+    pub fn driftAttachNext(target: apprt.Target) bool {
+        switch (target) {
+            .app => {
+                log.warn("drift attach next to app is unexpected", .{});
+                return false;
+            },
+
+            .surface => |core| {
+                const surface = core.rt_surface.surface;
+                const window = ext.getAncestor(
+                    Window,
+                    surface.as(gtk.Widget),
+                ) orelse {
+                    log.warn("surface is not in a window, ignoring drift_attach_next", .{});
+                    return false;
+                };
+                return window.openDriftAttachNextTab(surface);
             },
         }
     }

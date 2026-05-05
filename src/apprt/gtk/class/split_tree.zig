@@ -210,6 +210,7 @@ pub const SplitTree = extern struct {
             working_directory: ?[:0]const u8 = null,
             title: ?[:0]const u8 = null,
             drift_restore_id: ?[:0]const u8 = null,
+            drift_host: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         },
@@ -229,6 +230,7 @@ pub const SplitTree = extern struct {
             .working_directory = overrides.working_directory,
             .title = overrides.title,
             .drift_restore_id = drift_restore_id,
+            .drift_host = overrides.drift_host orelse self.driftHost(parent_),
         });
         defer surface.unref();
         _ = surface.refSink();
@@ -294,13 +296,18 @@ pub const SplitTree = extern struct {
 
         const tab_id = self.driftRestoreTabId() orelse return null;
         const alloc = Application.default().allocator();
-        const claimed = drift_restore.claimSplitId(alloc, config, tab_id) catch |err| {
+        const claimed = drift_restore.claimSplitId(alloc, config, tab_id, parent.driftHost()) catch |err| {
             log.warn("unable to claim Drift split ID err={}", .{err});
             return null;
         };
         defer alloc.free(claimed);
 
         return alloc.dupeZ(u8, claimed) catch null;
+    }
+
+    fn driftHost(_: *Self, parent_: ?*Surface) ?[:0]const u8 {
+        const parent = parent_ orelse return null;
+        return parent.driftHost();
     }
 
     fn driftRestoreTabId(self: *Self) ?[:0]const u8 {

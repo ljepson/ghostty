@@ -9,6 +9,7 @@ const gobject = @import("gobject");
 const gtk = @import("gtk");
 
 const i18n = @import("../../../os/main.zig").i18n;
+const internal_os = @import("../../../os/main.zig");
 const apprt = @import("../../../apprt.zig");
 const configpkg = @import("../../../config.zig");
 const TitlebarStyle = configpkg.Config.GtkTitlebarStyle;
@@ -399,7 +400,9 @@ pub const Window = extern struct {
     /// at the position dictated by the `window-new-tab-position` config.
     /// The new tab will be selected.
     pub fn newTab(self: *Self, parent_: ?*CoreSurface) void {
-        _ = self.newTabPage(parent_, .tab, .none);
+        _ = self.newTabPage(parent_, .tab, .{
+            .drift_host = self.driftHostForParent(parent_),
+        });
     }
 
     pub fn newTabForWindow(
@@ -409,6 +412,7 @@ pub const Window = extern struct {
             command: ?configpkg.Command = null,
             working_directory: ?[:0]const u8 = null,
             title: ?[:0]const u8 = null,
+            drift_host: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         },
@@ -420,6 +424,7 @@ pub const Window = extern struct {
                 .command = overrides.command,
                 .working_directory = overrides.working_directory,
                 .title = overrides.title,
+                .drift_host = overrides.drift_host,
             },
         );
     }
@@ -451,6 +456,7 @@ pub const Window = extern struct {
             working_directory: ?[:0]const u8 = null,
             title: ?[:0]const u8 = null,
             drift_restore_id: ?[:0]const u8 = null,
+            drift_host: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         },
@@ -464,7 +470,7 @@ pub const Window = extern struct {
             const config = if (priv.config) |v| v.get() else break :id null;
             if (!drift_restore.enabled(config)) break :id null;
 
-            const claimed = drift_restore.claimTabId(alloc, config) catch |err| {
+            const claimed = drift_restore.claimTabId(alloc, config, overrides.drift_host) catch |err| {
                 log.warn("unable to claim Drift restore tab ID err={}", .{err});
                 break :id null;
             };
@@ -484,6 +490,7 @@ pub const Window = extern struct {
                 .working_directory = overrides.working_directory,
                 .title = overrides.title,
                 .drift_restore_id = drift_restore_id,
+                .drift_host = overrides.drift_host,
             },
         );
 
@@ -550,6 +557,18 @@ pub const Window = extern struct {
         );
 
         return page;
+    }
+
+    fn activeDriftHost(self: *Self) ?[:0]const u8 {
+        const surface = self.getActiveSurface() orelse return null;
+        return surface.driftHost();
+    }
+
+    fn driftHostForParent(self: *Self, parent_: ?*CoreSurface) ?[:0]const u8 {
+        if (parent_) |parent| {
+            if (parent.rt_surface.surface.driftHost()) |host| return host;
+        }
+        return self.activeDriftHost();
     }
 
     pub const SelectTab = union(enum) {
@@ -1350,7 +1369,9 @@ pub const Window = extern struct {
         _: *adw.TabOverview,
         self: *Self,
     ) callconv(.c) *adw.TabPage {
-        return self.newTabPage(if (self.getActiveSurface()) |v| v.core() else null, .tab, .none);
+        return self.newTabPage(if (self.getActiveSurface()) |v| v.core() else null, .tab, .{
+            .drift_host = self.driftHostForParent(if (self.getActiveSurface()) |v| v.core() else null),
+        });
     }
 
     fn tabOverviewOpen(
@@ -1519,6 +1540,7 @@ pub const Window = extern struct {
             Application.default().allocator(),
             config,
             id,
+            if (tab.getActiveSurface()) |surface| surface.driftHost() else null,
         ) catch |err| {
             log.warn("unable to update Drift restore manifest err={}", .{err});
         };
@@ -2010,7 +2032,7 @@ pub const Window = extern struct {
         _: ?*glib.Variant,
         self: *Window,
     ) callconv(.c) void {
-        self.openDriftTab(.{ .direct = &.{"drift"} }, "Drift");
+        self.openDriftTab(.{ .direct = &.{"drift"} }, "Drift", self.activeDriftHost());
     }
 
     fn actionDriftListSessions(
@@ -2018,7 +2040,11 @@ pub const Window = extern struct {
         _: ?*glib.Variant,
         self: *Window,
     ) callconv(.c) void {
-        self.openDriftTab(.{ .direct = &.{ "drift", "sessions" } }, "Drift Sessions");
+        self.openDriftTab(
+            .{ .direct = &.{ "drift", "sessions" } },
+            "Drift Sessions",
+            self.activeDriftHost(),
+        );
     }
 
     fn actionDriftDetachSession(
@@ -2045,10 +2071,39 @@ pub const Window = extern struct {
         self.performBindingAction(.drift_debug_dump);
     }
 
+    pub fn openDriftAttachNextTab(self: *Window, surface: *Surface) bool {
+        const alloc = Application.default().allocator();
+        var owned_host: ?[:0]u8 = null;
+        defer if (owned_host) |host| alloc.free(host);
+
+        const host = surface.driftHost() orelse host: {
+            const priv: *Private = self.private();
+            const config = if (priv.config) |v| v.get() else return false;
+            if (config.@"drift-host".len > 0) break :host config.@"drift-host";
+
+            const local_host = internal_os.hostname.get(alloc) catch |err| {
+                log.warn("unable to determine local Drift host err={}", .{err});
+                return false;
+            };
+            defer alloc.free(local_host);
+
+            owned_host = alloc.dupeZ(u8, local_host) catch return false;
+            break :host owned_host.?;
+        };
+
+        self.openDriftTab(
+            .{ .direct = &.{ "drift", "attach-next", "--current-host", host } },
+            "Drift Attach",
+            host,
+        );
+        return true;
+    }
+
     fn openDriftTab(
         self: *Window,
         command: configpkg.Command,
         title: [:0]const u8,
+        drift_host: ?[:0]const u8,
     ) void {
         _ = self.newTabPage(
             if (self.getActiveSurface()) |v| v.core() else null,
@@ -2056,6 +2111,7 @@ pub const Window = extern struct {
             .{
                 .command = command,
                 .title = title,
+                .drift_host = drift_host,
             },
         );
     }

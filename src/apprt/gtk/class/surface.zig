@@ -582,6 +582,11 @@ pub const Surface = extern struct {
         /// core surface.
         pwd: ?[:0]const u8 = null,
 
+        /// The active Drift host reported by Drift itself via terminal
+        /// context signalling. This can differ from the configured backend
+        /// host when the user has nested into another Drift host.
+        dynamic_drift_host: ?[:0]const u8 = null,
+
         /// The title of this surface, if any has been set.
         title: ?[:0]const u8 = null,
 
@@ -710,6 +715,7 @@ pub const Surface = extern struct {
             command: ?configpkg.Command = null,
             working_directory: ?[:0]const u8 = null,
             drift_restore_id: ?[:0]const u8 = null,
+            drift_host: ?[:0]const u8 = null,
 
             pub const none: @This() = .{};
         } = .none,
@@ -722,6 +728,7 @@ pub const Surface = extern struct {
         working_directory: ?[:0]const u8 = null,
         title: ?[:0]const u8 = null,
         drift_restore_id: ?[:0]const u8 = null,
+        drift_host: ?[:0]const u8 = null,
 
         pub const none: @This() = .{};
     }) *Self {
@@ -734,6 +741,7 @@ pub const Surface = extern struct {
             .command = if (overrides.command) |c| c.clone(alloc) catch null else null,
             .working_directory = if (overrides.working_directory) |wd| alloc.dupeZ(u8, wd) catch null else null,
             .drift_restore_id = if (overrides.drift_restore_id) |id| alloc.dupeZ(u8, id) catch null else null,
+            .drift_host = if (overrides.drift_host) |host| alloc.dupeZ(u8, host) catch null else null,
         };
         return self;
     }
@@ -1927,6 +1935,10 @@ pub const Surface = extern struct {
             glib.free(@ptrCast(@constCast(v)));
             priv.pwd = null;
         }
+        if (priv.dynamic_drift_host) |v| {
+            glib.free(@ptrCast(@constCast(v)));
+            priv.dynamic_drift_host = null;
+        }
         if (priv.title) |v| {
             glib.free(@ptrCast(@constCast(v)));
             priv.title = null;
@@ -1946,6 +1958,10 @@ pub const Surface = extern struct {
         if (priv.overrides.drift_restore_id) |id| {
             alloc.free(id);
             priv.overrides.drift_restore_id = null;
+        }
+        if (priv.overrides.drift_host) |host| {
+            alloc.free(host);
+            priv.overrides.drift_host = null;
         }
 
         // Clean up key sequence and key table state
@@ -2021,6 +2037,13 @@ pub const Surface = extern struct {
         self.as(gobject.Object).notifyByPspec(properties.pwd.impl.param_spec);
     }
 
+    pub fn setDriftHost(self: *Self, host: ?[:0]const u8) void {
+        const priv = self.private();
+        if (priv.dynamic_drift_host) |v| glib.free(@ptrCast(@constCast(v)));
+        priv.dynamic_drift_host = null;
+        if (host) |v| priv.dynamic_drift_host = glib.ext.dupeZ(u8, v);
+    }
+
     /// Returns the focus state of this surface.
     pub fn getFocused(self: *Self) bool {
         return self.private().focused;
@@ -2028,6 +2051,17 @@ pub const Surface = extern struct {
 
     pub fn driftRestoreId(self: *Self) ?[:0]const u8 {
         return self.private().overrides.drift_restore_id;
+    }
+
+    pub fn driftHost(self: *Self) ?[:0]const u8 {
+        const priv = self.private();
+        if (priv.dynamic_drift_host) |host| return host;
+        if (priv.overrides.drift_host) |host| return host;
+
+        const config = if (priv.config) |config| config.get() else return null;
+        if (config.@"session-backend" != .drift) return null;
+        if (config.@"drift-host".len == 0) return null;
+        return config.@"drift-host";
     }
 
     pub fn getConfig(self: *Self) ?*const configpkg.Config {
@@ -3395,6 +3429,9 @@ pub const Surface = extern struct {
         }
         if (priv.overrides.drift_restore_id) |id| {
             config.@"drift-session-id" = try config.arenaAlloc().dupeZ(u8, id);
+        }
+        if (priv.overrides.drift_host) |host| {
+            config.@"drift-host" = try config.arenaAlloc().dupeZ(u8, host);
         }
 
         // Properties that can impact surface init

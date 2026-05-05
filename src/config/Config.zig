@@ -1182,9 +1182,9 @@ command: ?Command = null,
 /// Drift host alias used when `session-backend=drift`.
 ///
 /// This must be a host known to Drift's own configuration, i.e. from
-/// `~/.config/drift/config.toml`, not from SSH config. In this fork the default
-/// is `zen`, which is the current local Drift daemon alias.
-@"drift-host": [:0]const u8 = "zen",
+/// `~/.config/drift/config.toml`, not from SSH config. Empty means use the
+/// local machine hostname.
+@"drift-host": [:0]const u8 = "",
 
 /// Prefix used for Ghostty-created Drift session names.
 ///
@@ -6706,6 +6706,11 @@ pub const Keybinds = struct {
                 alloc,
                 .{ .key = .{ .unicode = 't' }, .mods = .{ .ctrl = true, .shift = true } },
                 .{ .new_tab = {} },
+            );
+            try self.set.put(
+                alloc,
+                .{ .key = .{ .unicode = 'y' }, .mods = .{ .ctrl = true, .shift = true } },
+                .drift_attach_next,
             );
             try self.set.put(
                 alloc,

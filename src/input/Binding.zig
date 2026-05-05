@@ -347,6 +347,9 @@ pub const Action = union(enum) {
     /// Ask the active Drift session to write a diagnostic trace bundle.
     drift_debug_dump,
 
+    /// Open a new tab attached to the next unattached Drift session.
+    drift_attach_next,
+
     /// Send data to the pty depending on whether cursor key mode is enabled
     /// (`application`) or disabled (`normal`).
     cursor_key: CursorKey,
@@ -1415,6 +1418,7 @@ pub const Action = union(enum) {
             // come from. For example `new_window` needs to be sourced to
             // a surface so inheritance can be done correctly.
             .new_tab,
+            .drift_attach_next,
             .previous_tab,
             .next_tab,
             .last_tab,
@@ -4566,6 +4570,10 @@ test "parse: drift actions" {
     {
         const binding = try parseSingle("a=drift_debug_dump");
         try testing.expect(binding.action == .drift_debug_dump);
+    }
+    {
+        const binding = try parseSingle("a=drift_attach_next");
+        try testing.expect(binding.action == .drift_attach_next);
     }
 }
 

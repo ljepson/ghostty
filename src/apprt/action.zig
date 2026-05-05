@@ -350,6 +350,10 @@ pub const Action = union(Key) {
     /// Navigate to the previous or next command output in the scrollback.
     navigate_command: NavigateCommand,
 
+    /// Attach a Drift tab to the next unattached session, preferring the
+    /// current Drift host.
+    drift_attach_next,
+
     /// Direction for navigate_command.
     pub const NavigateCommand = enum(c_int) {
         previous,
@@ -425,6 +429,7 @@ pub const Action = union(Key) {
         copy_title_to_clipboard,
         copy_last_failed_output,
         navigate_command,
+        drift_attach_next,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

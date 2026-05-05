@@ -171,6 +171,12 @@ fn actionCommands(action: Action.Key) []const Command {
             .description = "Ask the active Drift session to write a diagnostic trace bundle.",
         }},
 
+        .drift_attach_next => comptime &.{.{
+            .action = .drift_attach_next,
+            .title = "Drift: Attach Next Session",
+            .description = "Open a new tab attached to the next unattached Drift session, preferring the current host.",
+        }},
+
         .copy_to_clipboard => comptime &.{ .{
             .action = .{ .copy_to_clipboard = .mixed },
             .title = "Copy to Clipboard",
