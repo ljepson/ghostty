@@ -6,6 +6,7 @@
 .vscode/
 .direnv/
 .envrc.local
+.engram/
 .flatpak-builder/
 zig-cache/
 .zig-cache/
