@@ -5196,6 +5196,12 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             {},
         ),
 
+        .drift_new_tab => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .drift_new_tab,
+            {},
+        ),
+
         .cursor_key => |ck| {
             // We send a different sequence depending on if we're
             // in cursor keys mode. We're in "normal" mode if cursor
@@ -5686,6 +5692,19 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
                 .right => .right,
             },
         ),
+
+        .close_tab_kill_drift => {
+            // Send detach sequence to Drift session if this surface has one
+            if (self.driftRestoreId()) |_| {
+                self.writeStableInput("\r~.");
+            }
+            // Then proceed with normal tab close
+            return try self.rt_app.performAction(
+                .{ .surface = self },
+                .close_tab,
+                .this,
+            );
+        },
 
         inline .previous_tab,
         .next_tab,

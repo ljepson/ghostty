@@ -354,6 +354,12 @@ pub const Action = union(Key) {
     /// current Drift host.
     drift_attach_next,
 
+    /// Open a new Drift tab using the actual local hostname.
+    drift_new_tab,
+
+    /// Close current tab after detaching any Drift session.
+    close_tab_kill_drift,
+
     /// Direction for navigate_command.
     pub const NavigateCommand = enum(c_int) {
         previous,
@@ -430,6 +436,7 @@ pub const Action = union(Key) {
         copy_last_failed_output,
         navigate_command,
         drift_attach_next,
+        drift_new_tab,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

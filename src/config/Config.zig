@@ -6715,7 +6715,17 @@ pub const Keybinds = struct {
             try self.set.put(
                 alloc,
                 .{ .key = .{ .unicode = 'w' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .close_tab = .this },
+                .close_tab_kill_drift,
+            );
+            try self.set.put(
+                alloc,
+                .{ .key = .{ .unicode = 'h' }, .mods = .{ .ctrl = true, .shift = true } },
+                .drift_detach_session,
+            );
+            try self.set.put(
+                alloc,
+                .{ .key = .{ .unicode = 'B' }, .mods = .{ .ctrl = true, .shift = true } },
+                .drift_new_tab,
             );
             try self.set.putFlags(
                 alloc,

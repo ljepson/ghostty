@@ -350,6 +350,11 @@ pub const Action = union(enum) {
     /// Open a new tab attached to the next unattached Drift session.
     drift_attach_next,
 
+    /// Open a new tab with a new Drift session using the local hostname.
+    /// Unlike drift_attach_next, this always creates a fresh session
+    /// attached to the actual local machine hostname (not OSC 3008 dynamic host).
+    drift_new_tab,
+
     /// Send data to the pty depending on whether cursor key mode is enabled
     /// (`application`) or disabled (`normal`).
     cursor_key: CursorKey,
@@ -716,6 +721,12 @@ pub const Action = union(enum) {
     /// This might trigger a close confirmation popup, depending on the value
     /// of the `confirm-close-surface` configuration setting.
     close_tab: CloseTabMode,
+
+    /// Close the current tab after detaching any Drift session.
+    ///
+    /// Unlike `close_tab`, this sends the Drift detach sequence (~.) before
+    /// closing, ensuring the session is properly terminated.
+    close_tab_kill_drift,
 
     /// Close the current window and all tabs and splits therein.
     ///
