@@ -2099,6 +2099,29 @@ pub const Window = extern struct {
         return true;
     }
 
+    /// Open a new Drift tab using the actual local hostname, not the
+    /// surface's dynamic drift host (which may have been set via OSC 3008).
+    pub fn openDriftNewTab(self: *Window, surface: *Surface) bool {
+        _ = surface;
+        const alloc = Application.default().allocator();
+
+        const local_host = internal_os.hostname.get(alloc) catch |err| {
+            log.warn("unable to determine local Drift host err={}", .{err});
+            return false;
+        };
+        defer alloc.free(local_host);
+
+        const host = alloc.dupeZ(u8, local_host) catch return false;
+        defer alloc.free(host);
+
+        self.openDriftTab(
+            .{ .direct = &.{ "drift", "attach-next", "--current-host", host } },
+            "Drift New",
+            host,
+        );
+        return true;
+    }
+
     fn openDriftTab(
         self: *Window,
         command: configpkg.Command,

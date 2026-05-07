@@ -357,6 +357,12 @@ pub const Action = union(Key) {
     /// Show Familiar's current comment as an on-screen character.
     familiar_speak,
 
+    /// Open a new Drift tab using the actual local hostname.
+    drift_new_tab,
+
+    /// Close current tab after detaching any Drift session.
+    close_tab_kill_drift,
+
     /// Direction for navigate_command.
     pub const NavigateCommand = enum(c_int) {
         previous,
@@ -433,7 +439,12 @@ pub const Action = union(Key) {
         copy_last_failed_output,
         navigate_command,
         drift_attach_next,
+<<<<<<< HEAD
         familiar_speak,
+||||||| a415cbd39
+=======
+        drift_new_tab,
+>>>>>>> 9578a95f0
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

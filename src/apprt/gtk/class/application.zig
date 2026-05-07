@@ -691,6 +691,8 @@ pub const Application = extern struct {
 
             .drift_attach_next => return Action.driftAttachNext(target),
 
+            .drift_new_tab => return Action.driftNewTab(target),
+
             .familiar_speak => return Action.familiarSpeak(target),
 
             .equalize_splits => return Action.equalizeSplits(target),
@@ -2273,6 +2275,7 @@ const Action = struct {
         }
     }
 
+<<<<<<< HEAD
     pub fn familiarSpeak(target: apprt.Target) bool {
         switch (target) {
             .app => {
@@ -2282,6 +2285,26 @@ const Action = struct {
 
             .surface => |core| {
                 return core.rt_surface.gobj().showFamiliar();
+||||||| a415cbd39
+=======
+    pub fn driftNewTab(target: apprt.Target) bool {
+        switch (target) {
+            .app => {
+                log.warn("drift new tab to app is unexpected", .{});
+                return false;
+            },
+
+            .surface => |core| {
+                const surface = core.rt_surface.surface;
+                const window = ext.getAncestor(
+                    Window,
+                    surface.as(gtk.Widget),
+                ) orelse {
+                    log.warn("surface is not in a window, ignoring drift_new_tab", .{});
+                    return false;
+                };
+                return window.openDriftNewTab(surface);
+>>>>>>> 9578a95f0
             },
         }
     }
