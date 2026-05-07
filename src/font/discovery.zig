@@ -15,6 +15,10 @@ const Variation = @import("main.zig").face.Variation;
 
 const log = std.log.scoped(.discovery);
 
+/// Fontconfig has process-global state and its config/pattern APIs are not
+/// safe to race from multiple renderer/font discovery paths.
+var fontconfig_lock: std.Thread.Mutex = .{};
+
 /// Discover implementation for the compile options.
 pub const Discover = switch (options.backend) {
     .freetype => void, // no discovery
@@ -267,6 +271,9 @@ pub const Fontconfig = struct {
     ) !DiscoverIterator {
         _ = alloc;
 
+        fontconfig_lock.lock();
+        defer fontconfig_lock.unlock();
+
         // Build our pattern that we'll search for
         const pat = desc.toFcPattern();
         errdefer pat.destroy();
@@ -307,6 +314,9 @@ pub const Fontconfig = struct {
         i: usize,
 
         pub fn deinit(self: *DiscoverIterator) void {
+            fontconfig_lock.lock();
+            defer fontconfig_lock.unlock();
+
             self.set.destroy();
             self.pattern.destroy();
             self.* = undefined;
@@ -314,6 +324,9 @@ pub const Fontconfig = struct {
 
         pub fn next(self: *DiscoverIterator) fontconfig.Error!?DeferredFace {
             if (self.i >= self.fonts.len) return null;
+
+            fontconfig_lock.lock();
+            defer fontconfig_lock.unlock();
 
             // Get the copied pattern from our fontset that has the
             // attributes configured for rendering.
