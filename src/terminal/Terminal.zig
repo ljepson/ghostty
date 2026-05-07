@@ -13251,6 +13251,7 @@ test "Terminal: end_command multiple commands track failed state" {
         .action = .end_command,
         .options_unvalidated = "0",
     });
+    const success_y = t.screens.active.cursor.y;
 
     // Command 2 - failure
     try t.semanticPrompt(.init(.fresh_line_new_prompt));
@@ -13261,18 +13262,17 @@ test "Terminal: end_command multiple commands track failed state" {
         .action = .end_command,
         .options_unvalidated = "1",
     });
+    const failed_y = t.screens.active.cursor.y;
 
-    // Move cursor to verify command 1 row is not failed
-    t.setCursorPos(0, 0);
+    // Verify command 1 row is not failed
     {
-        const list_cell = t.screens.active.pages.getCell(.{ .active = .{ .x = 0, .y = 0 } }).?;
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{ .x = 0, .y = success_y } }).?;
         try testing.expect(!list_cell.row.command_failed);
     }
 
-    // Move cursor to verify command 2 row is failed
-    t.setCursorPos(0, 3);
+    // Verify command 2 row is failed
     {
-        const list_cell = t.screens.active.pages.getCell(.{ .active = .{ .x = 0, .y = 3 } }).?;
+        const list_cell = t.screens.active.pages.getCell(.{ .active = .{ .x = 0, .y = failed_y } }).?;
         try testing.expect(list_cell.row.command_failed);
     }
 }

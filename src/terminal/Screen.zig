@@ -2946,12 +2946,33 @@ pub fn selectLastFailedOutput(self: *Screen) ?Selection {
     const br = self.pages.getBottomRight(.screen) orelse return null;
     var it = br.promptIterator(.left_up, null);
     while (it.next()) |prompt_pin| {
-        const rac = prompt_pin.rowAndCell();
-        if (!rac.row.command_failed) continue;
+        if (!self.promptHasFailedCommand(prompt_pin)) continue;
         if (self.selectOutputForPrompt(prompt_pin)) |sel| return sel;
     }
 
     return null;
+}
+
+fn promptHasFailedCommand(self: *Screen, prompt_pin: Pin) bool {
+    const end = end: {
+        var it = prompt_pin.promptIterator(.right_down, null);
+        _ = it.next();
+
+        if (it.next()) |next_prompt| {
+            var prev = next_prompt.up(1) orelse break :end prompt_pin;
+            prev.x = prev.node.data.size.cols - 1;
+            break :end prev;
+        }
+
+        break :end self.pages.getBottomRight(.screen) orelse return false;
+    };
+
+    var row_it = prompt_pin.rowIterator(.right_down, end);
+    while (row_it.next()) |row_pin| {
+        if (row_pin.rowAndCell().row.command_failed) return true;
+    }
+
+    return false;
 }
 
 fn selectOutputForPrompt(self: *Screen, prompt_pin: Pin) ?Selection {
@@ -8393,11 +8414,10 @@ test "Screen: selectWord" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"',
-        '│',
-        '`', '|', ':',  ';',  ',',
-        '(', ')', '[',  ']',  '{',
-        '}', '<', '>',  '$',
+        0,     ' ', '\t', '\'', '"',
+        '│', '`', '|',  ':',  ';',
+        ',',   '(', ')',  '[',  ']',
+        '{',   '}', '<',  '>',  '$',
     };
 
     // Outside of active area
@@ -8517,11 +8537,10 @@ test "Screen: selectWord across soft-wrap" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"',
-        '│',
-        '`', '|', ':',  ';',  ',',
-        '(', ')', '[',  ']',  '{',
-        '}', '<', '>',  '$',
+        0,     ' ', '\t', '\'', '"',
+        '│', '`', '|',  ':',  ';',
+        ',',   '(', ')',  '[',  ']',
+        '{',   '}', '<',  '>',  '$',
     };
 
     {
@@ -8592,11 +8611,10 @@ test "Screen: selectWord whitespace across soft-wrap" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"',
-        '│',
-        '`', '|', ':',  ';',  ',',
-        '(', ')', '[',  ']',  '{',
-        '}', '<', '>',  '$',
+        0,     ' ', '\t', '\'', '"',
+        '│', '`', '|',  ':',  ';',
+        ',',   '(', ')',  '[',  ']',
+        '{',   '}', '<',  '>',  '$',
     };
 
     // Going forward
@@ -8657,11 +8675,10 @@ test "Screen: selectWord with character boundary" {
 
     // Default boundary codepoints for word selection
     const boundary_codepoints = &[_]u21{
-        0,   ' ', '\t', '\'', '"',
-        '│',
-        '`', '|', ':',  ';',  ',',
-        '(', ')', '[',  ']',  '{',
-        '}', '<', '>',  '$',
+        0,     ' ', '\t', '\'', '"',
+        '│', '`', '|',  ':',  ';',
+        ',',   '(', ')',  '[',  ']',
+        '{',   '}', '<',  '>',  '$',
     };
 
     const cases = [_][]const u8{
@@ -8973,7 +8990,7 @@ test "Screen: selectLastFailedOutput basic" {
 
     // Manually mark the last row as command_failed
     // (simulating what Terminal.zig does on OSC 133 D with non-zero exit code)
-    const last_row = s.pages.getRowAndCell(0, s.pages.rows - 1);
+    const last_row = s.pages.pin(.{ .active = .{ .x = 0, .y = s.pages.rows - 1 } }).?.rowAndCell();
     last_row.row.command_failed = true;
 
     // selectLastFailedOutput should find the failed command
@@ -9038,7 +9055,7 @@ test "Screen: selectLastFailedOutput multiple failed" {
 
     // Mark first command as failed
     {
-        const row = s.pages.getRowAndCell(0, 2).row;
+        const row = s.pages.pin(.{ .active = .{ .x = 0, .y = 2 } }).?.rowAndCell().row;
         row.command_failed = true;
     }
 
@@ -9052,7 +9069,7 @@ test "Screen: selectLastFailedOutput multiple failed" {
 
     // Mark second command as failed (most recent)
     {
-        const row = s.pages.getRowAndCell(0, s.pages.rows - 1).row;
+        const row = s.pages.pin(.{ .active = .{ .x = 0, .y = s.pages.rows - 1 } }).?.rowAndCell().row;
         row.command_failed = true;
     }
 
@@ -9119,7 +9136,7 @@ test "Screen: command_failed flag from cursor page_row" {
     try s.testWriteString("fail\n");
 
     // Get the row where the command ended
-    const row = s.pages.getRowAndCell(0, 0).row;
+    const row = s.pages.pin(.{ .active = .{ .x = 0, .y = 0 } }).?.rowAndCell().row;
     try testing.expect(row.command_failed == false);
 
     // Now simulate setting command_failed (as Terminal.zig does on OSC 133 D;exit_code)
