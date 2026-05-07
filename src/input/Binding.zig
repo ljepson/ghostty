@@ -350,6 +350,9 @@ pub const Action = union(enum) {
     /// Open a new tab attached to the next unattached Drift session.
     drift_attach_next,
 
+    /// Show Familiar's current comment as an on-screen character.
+    familiar_speak,
+
     /// Send data to the pty depending on whether cursor key mode is enabled
     /// (`application`) or disabled (`normal`).
     cursor_key: CursorKey,
@@ -1419,6 +1422,7 @@ pub const Action = union(enum) {
             // a surface so inheritance can be done correctly.
             .new_tab,
             .drift_attach_next,
+            .familiar_speak,
             .previous_tab,
             .next_tab,
             .last_tab,
@@ -4574,6 +4578,10 @@ test "parse: drift actions" {
     {
         const binding = try parseSingle("a=drift_attach_next");
         try testing.expect(binding.action == .drift_attach_next);
+    }
+    {
+        const binding = try parseSingle("a=familiar_speak");
+        try testing.expect(binding.action == .familiar_speak);
     }
 }
 

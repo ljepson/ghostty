@@ -5195,6 +5195,11 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             .drift_attach_next,
             {},
         ),
+        .familiar_speak => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .familiar_speak,
+            {},
+        ),
 
         .cursor_key => |ck| {
             // We send a different sequence depending on if we're

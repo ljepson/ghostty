@@ -691,6 +691,8 @@ pub const Application = extern struct {
 
             .drift_attach_next => return Action.driftAttachNext(target),
 
+            .familiar_speak => return Action.familiarSpeak(target),
+
             .equalize_splits => return Action.equalizeSplits(target),
 
             .goto_split => return Action.gotoSplit(target, value),
@@ -2267,6 +2269,19 @@ const Action = struct {
                     return false;
                 };
                 return window.openDriftAttachNextTab(surface);
+            },
+        }
+    }
+
+    pub fn familiarSpeak(target: apprt.Target) bool {
+        switch (target) {
+            .app => {
+                log.warn("familiar speak to app is unexpected", .{});
+                return false;
+            },
+
+            .surface => |core| {
+                return core.rt_surface.gobj().showFamiliar();
             },
         }
     }

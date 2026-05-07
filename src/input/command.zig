@@ -177,6 +177,12 @@ fn actionCommands(action: Action.Key) []const Command {
             .description = "Open a new tab attached to the next unattached Drift session, preferring the current host.",
         }},
 
+        .familiar_speak => comptime &.{.{
+            .action = .familiar_speak,
+            .title = "Familiar: Speak",
+            .description = "Show Familiar's current comment as a small terminal companion.",
+        }},
+
         .copy_to_clipboard => comptime &.{ .{
             .action = .{ .copy_to_clipboard = .mixed },
             .title = "Copy to Clipboard",

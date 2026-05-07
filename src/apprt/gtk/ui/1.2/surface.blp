@@ -200,6 +200,42 @@ Overlay terminal_page {
   }
 
   [overlay]
+  Box familiar_overlay {
+    styles [
+      "familiar-overlay",
+    ]
+
+    visible: false;
+    can-focus: false;
+    can-target: false;
+    focusable: false;
+    halign: end;
+    valign: start;
+    spacing: 8;
+    orientation: horizontal;
+
+    Label {
+      styles [
+        "familiar-avatar",
+      ]
+
+      label: "(o_o)";
+    }
+
+    Label familiar_message {
+      styles [
+        "familiar-message",
+      ]
+
+      label: _("I'm here. No Familiar comments yet.");
+      wrap: true;
+      wrap-mode: word_char;
+      max-width-chars: 48;
+      xalign: 0;
+    }
+  }
+
+  [overlay]
   // Apply unfocused-split-fill and unfocused-split-opacity to current surface
   // this is only applied when a tab has more than one surface
   Revealer {

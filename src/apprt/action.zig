@@ -354,6 +354,9 @@ pub const Action = union(Key) {
     /// current Drift host.
     drift_attach_next,
 
+    /// Show Familiar's current comment as an on-screen character.
+    familiar_speak,
+
     /// Direction for navigate_command.
     pub const NavigateCommand = enum(c_int) {
         previous,
@@ -430,6 +433,7 @@ pub const Action = union(Key) {
         copy_last_failed_output,
         navigate_command,
         drift_attach_next,
+        familiar_speak,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

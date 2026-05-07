@@ -609,6 +609,10 @@ pub const Surface = extern struct {
         url_left: *gtk.Label,
         url_right: *gtk.Label,
 
+        /// Familiar's character overlay and message.
+        familiar_overlay: *gtk.Box,
+        familiar_message: *gtk.Label,
+
         /// The resize overlay
         resize_overlay: *ResizeOverlay,
 
@@ -651,6 +655,9 @@ pub const Surface = extern struct {
 
         // Progress bar
         progress_bar_timer: ?c_uint = null,
+
+        // Familiar character overlay
+        familiar_overlay_timer: ?c_uint = null,
 
         // True while the bell is ringing. This will be set to false (after
         // true) under various scenarios, but can also manually be set to
@@ -1101,6 +1108,89 @@ pub const Surface = extern struct {
         const priv = self.private();
         priv.progress_bar_timer = null;
         self.setProgressReport(.{ .state = .remove });
+        return @intFromBool(glib.SOURCE_REMOVE);
+    }
+
+    /// Show Familiar's current comment as a short-lived character overlay.
+    pub fn showFamiliar(self: *Self) bool {
+        const alloc = Application.default().allocator();
+        const message = self.familiarSpeechText(alloc) catch |err| message: {
+            log.warn("unable to read Familiar speech err={}", .{err});
+            break :message alloc.dupeZ(u8, "I'm here, but Familiar did not answer.") catch return false;
+        };
+        defer alloc.free(message);
+
+        self.showFamiliarMessage(message);
+        return true;
+    }
+
+    fn showFamiliarMessage(self: *Self, message: [:0]const u8) void {
+        const priv = self.private();
+
+        if (priv.familiar_overlay_timer) |timer| {
+            if (glib.Source.remove(timer) == 0) {
+                log.warn("unable to remove Familiar overlay timer", .{});
+            }
+            priv.familiar_overlay_timer = null;
+        }
+
+        priv.familiar_message.setLabel(message);
+        priv.familiar_overlay.as(gtk.Widget).setVisible(@intFromBool(true));
+        priv.familiar_overlay_timer = glib.timeoutAdd(
+            8 * std.time.ms_per_s,
+            familiarOverlayTimer,
+            self,
+        );
+    }
+
+    fn familiarSpeechText(self: *Self, alloc: Allocator) ![:0]u8 {
+        const pwd = self.private().pwd;
+        return runFamiliarSpeak(
+            alloc,
+            "/srv/familiar/familiar/target/release/familiar",
+            pwd,
+        ) catch |absolute_err| {
+            log.debug("absolute familiar speak failed err={}", .{absolute_err});
+            return runFamiliarSpeak(alloc, "familiar", pwd);
+        };
+    }
+
+    fn runFamiliarSpeak(
+        alloc: Allocator,
+        exe: []const u8,
+        pwd: ?[:0]const u8,
+    ) ![:0]u8 {
+        const result = if (pwd) |cwd|
+            try std.process.Child.run(.{
+                .allocator = alloc,
+                .argv = &.{ exe, "speak", "--client", "ghostty", "--cwd", cwd },
+                .max_output_bytes = 4096,
+            })
+        else
+            try std.process.Child.run(.{
+                .allocator = alloc,
+                .argv = &.{ exe, "speak", "--client", "ghostty" },
+                .max_output_bytes = 4096,
+            });
+        defer alloc.free(result.stdout);
+        defer alloc.free(result.stderr);
+
+        switch (result.term) {
+            .Exited => |code| if (code != 0) return error.FamiliarExited,
+            else => return error.FamiliarExited,
+        }
+
+        const trimmed = std.mem.trim(u8, result.stdout, " \t\r\n");
+        if (trimmed.len == 0) return error.FamiliarEmpty;
+        return alloc.dupeZ(u8, trimmed[0..@min(trimmed.len, 240)]);
+    }
+
+    /// The Familiar overlay has been visible long enough; remove it.
+    fn familiarOverlayTimer(ud: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(ud.?));
+        const priv = self.private();
+        priv.familiar_overlay_timer = null;
+        priv.familiar_overlay.as(gtk.Widget).setVisible(@intFromBool(false));
         return @intFromBool(glib.SOURCE_REMOVE);
     }
 
@@ -1863,6 +1953,13 @@ pub const Surface = extern struct {
                 log.warn("unable to remove progress bar timer", .{});
             }
             priv.progress_bar_timer = null;
+        }
+
+        if (priv.familiar_overlay_timer) |timer| {
+            if (glib.Source.remove(timer) == 0) {
+                log.warn("unable to remove Familiar overlay timer", .{});
+            }
+            priv.familiar_overlay_timer = null;
         }
 
         if (priv.idle_rechild) |v| {
@@ -3597,6 +3694,8 @@ pub const Surface = extern struct {
             class.bindTemplateChildPrivate("resize_overlay", .{});
             class.bindTemplateChildPrivate("search_overlay", .{});
             class.bindTemplateChildPrivate("key_state_overlay", .{});
+            class.bindTemplateChildPrivate("familiar_overlay", .{});
+            class.bindTemplateChildPrivate("familiar_message", .{});
             class.bindTemplateChildPrivate("terminal_page", .{});
             class.bindTemplateChildPrivate("drop_target", .{});
             class.bindTemplateChildPrivate("im_context", .{});

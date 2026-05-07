@@ -157,6 +157,26 @@ label.debug-watermark {
   outline-style: solid;
   outline-width: 1px;
 }
+
+.surface .familiar-overlay {
+  background-color: var(--popover-bg-color);
+  color: var(--popover-fg-color);
+  padding: 8px 10px 8px 10px;
+  margin: 12px 12px 12px 12px;
+  border-radius: 8px 8px 8px 8px;
+  outline-style: solid;
+  outline-color: #555555;
+  outline-width: 1px;
+}
+
+.surface .familiar-avatar {
+  font-weight: 700;
+}
+
+.surface .familiar-message {
+  font-size: 12px;
+}
+
 /*
  * Command Palette
  */
