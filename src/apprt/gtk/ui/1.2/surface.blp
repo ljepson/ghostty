@@ -214,12 +214,15 @@ Overlay terminal_page {
     spacing: 8;
     orientation: horizontal;
 
-    Label {
+    DrawingArea familiar_avatar {
       styles [
         "familiar-avatar",
       ]
 
-      label: "(o_o)";
+      content-width: 56;
+      content-height: 64;
+      halign: center;
+      valign: center;
     }
 
     Label familiar_message {

@@ -5700,8 +5700,10 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
 
         .close_tab_kill_drift => {
             // Send detach sequence to Drift session if this surface has one
-            if (self.driftRestoreId()) |_| {
-                self.writeStableInput("\r~.");
+            if (@hasDecl(apprt.Surface, "gobj")) {
+                if (self.rt_surface.gobj().driftRestoreId()) |_| {
+                    self.writeStableInput("\r~.");
+                }
             }
             // Then proceed with normal tab close
             return try self.rt_app.performAction(

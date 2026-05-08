@@ -439,12 +439,9 @@ pub const Action = union(Key) {
         copy_last_failed_output,
         navigate_command,
         drift_attach_next,
-<<<<<<< HEAD
         familiar_speak,
-||||||| a415cbd39
-=======
         drift_new_tab,
->>>>>>> 9578a95f0
+        close_tab_kill_drift,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

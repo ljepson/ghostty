@@ -673,6 +673,7 @@ pub const Application = extern struct {
     ) !bool {
         switch (action) {
             .close_tab => return Action.closeTab(target, value),
+            .close_tab_kill_drift => return Action.closeTabKillDrift(target),
             .close_window => return Action.closeWindow(target),
 
             .copy_title_to_clipboard => return Action.copyTitleToClipboard(target),
@@ -1926,6 +1927,10 @@ const Action = struct {
         }
     }
 
+    pub fn closeTabKillDrift(target: apprt.Target) bool {
+        return bindingAction(target, .close_tab_kill_drift);
+    }
+
     pub fn closeWindow(target: apprt.Target) bool {
         switch (target) {
             .app => return false,
@@ -2275,7 +2280,6 @@ const Action = struct {
         }
     }
 
-<<<<<<< HEAD
     pub fn familiarSpeak(target: apprt.Target) bool {
         switch (target) {
             .app => {
@@ -2285,8 +2289,10 @@ const Action = struct {
 
             .surface => |core| {
                 return core.rt_surface.gobj().showFamiliar();
-||||||| a415cbd39
-=======
+            },
+        }
+    }
+
     pub fn driftNewTab(target: apprt.Target) bool {
         switch (target) {
             .app => {
@@ -2304,7 +2310,6 @@ const Action = struct {
                     return false;
                 };
                 return window.openDriftNewTab(surface);
->>>>>>> 9578a95f0
             },
         }
     }

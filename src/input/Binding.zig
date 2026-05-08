@@ -1433,6 +1433,8 @@ pub const Action = union(enum) {
             // a surface so inheritance can be done correctly.
             .new_tab,
             .drift_attach_next,
+            .drift_new_tab,
+            .close_tab_kill_drift,
             .familiar_speak,
             .previous_tab,
             .next_tab,

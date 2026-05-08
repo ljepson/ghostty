@@ -177,6 +177,18 @@ fn actionCommands(action: Action.Key) []const Command {
             .description = "Open a new tab attached to the next unattached Drift session, preferring the current host.",
         }},
 
+        .drift_new_tab => comptime &.{.{
+            .action = .drift_new_tab,
+            .title = "Drift: New Tab",
+            .description = "Open a new Drift tab using the actual local hostname.",
+        }},
+
+        .close_tab_kill_drift => comptime &.{.{
+            .action = .close_tab_kill_drift,
+            .title = "Drift: Close Tab and Kill Session",
+            .description = "Detach the active Drift session before closing the current tab.",
+        }},
+
         .familiar_speak => comptime &.{.{
             .action = .familiar_speak,
             .title = "Familiar: Speak",

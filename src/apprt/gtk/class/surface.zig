@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = @import("../../../quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
 const adw = @import("adw");
+const cairo = @import("cairo");
 const gdk = @import("gdk");
 const gio = @import("gio");
 const glib = @import("glib");
@@ -611,6 +612,7 @@ pub const Surface = extern struct {
 
         /// Familiar's character overlay and message.
         familiar_overlay: *gtk.Box,
+        familiar_avatar: *gtk.DrawingArea,
         familiar_message: *gtk.Label,
 
         /// The resize overlay
@@ -658,6 +660,8 @@ pub const Surface = extern struct {
 
         // Familiar character overlay
         familiar_overlay_timer: ?c_uint = null,
+        familiar_motion_timer: ?c_uint = null,
+        familiar_motion_step: u8 = 0,
 
         // True while the bell is ringing. This will be set to false (after
         // true) under various scenarios, but can also manually be set to
@@ -1111,20 +1115,107 @@ pub const Surface = extern struct {
         return @intFromBool(glib.SOURCE_REMOVE);
     }
 
+    const FamiliarSpeech = struct {
+        text: [:0]u8,
+        ttl_ms: u32 = 10 * std.time.ms_per_s,
+    };
+
+    const FamiliarOverlayPosition = struct {
+        halign: gtk.Align,
+        valign: gtk.Align,
+        margin_top: c_int = 12,
+        margin_bottom: c_int = 12,
+        margin_start: c_int = 12,
+        margin_end: c_int = 12,
+    };
+
+    const familiar_overlay_positions = [_]FamiliarOverlayPosition{
+        .{ .halign = .end, .valign = .start, .margin_top = 12, .margin_end = 12 },
+        .{ .halign = .end, .valign = .start, .margin_top = 56, .margin_end = 12 },
+        .{ .halign = .end, .valign = .center, .margin_end = 12 },
+        .{ .halign = .end, .valign = .end, .margin_bottom = 56, .margin_end = 12 },
+        .{ .halign = .end, .valign = .end, .margin_bottom = 12, .margin_end = 12 },
+        .{ .halign = .center, .valign = .end, .margin_bottom = 12 },
+        .{ .halign = .start, .valign = .end, .margin_bottom = 12, .margin_start = 12 },
+        .{ .halign = .start, .valign = .center, .margin_start = 12 },
+        .{ .halign = .start, .valign = .start, .margin_top = 56, .margin_start = 12 },
+        .{ .halign = .start, .valign = .start, .margin_top = 12, .margin_start = 12 },
+    };
+
+    fn familiarAvatarDraw(
+        _: *gtk.DrawingArea,
+        cr: *cairo.Context,
+        width_: c_int,
+        height_: c_int,
+        ud: ?*anyopaque,
+    ) callconv(.c) void {
+        const self: *Self = @ptrCast(@alignCast(ud.?));
+        const step: f64 = @floatFromInt(self.private().familiar_motion_step % 12);
+        const tau = std.math.pi * 2.0;
+        const bob = @sin((step / 12.0) * tau) * 2.0;
+        const width: f64 = @floatFromInt(width_);
+        const height: f64 = @floatFromInt(height_);
+        const scale = @min(width / 56.0, height / 64.0);
+
+        cr.setAntialias(.best);
+        cr.translate((width - 56.0 * scale) / 2.0, (height - 64.0 * scale) / 2.0 + bob);
+        cr.scale(scale, scale);
+        cr.setLineCap(.round);
+        cr.setLineJoin(.round);
+
+        cr.setLineWidth(5.0);
+        cr.setSourceRgba(0.08, 0.10, 0.12, 0.68);
+        cr.moveTo(14.0, 44.0);
+        cr.curveTo(8.0, 40.0, 7.0, 29.0, 14.0, 23.0);
+        cr.moveTo(42.0, 44.0);
+        cr.curveTo(48.0, 40.0, 49.0, 29.0, 42.0, 23.0);
+        cr.stroke();
+
+        cr.setLineWidth(2.2);
+        cr.setSourceRgba(0.96, 0.97, 0.92, 0.98);
+        cr.arc(28.0, 31.0, 20.0, 0.0, tau);
+        cr.fillPreserve();
+        cr.setSourceRgba(0.05, 0.07, 0.08, 0.9);
+        cr.stroke();
+
+        cr.setSourceRgba(0.24, 0.86, 0.78, 1.0);
+        cr.arc(20.0, 28.0, 4.2, 0.0, tau);
+        cr.fill();
+        cr.arc(36.0, 28.0, 4.2, 0.0, tau);
+        cr.fill();
+
+        cr.setLineWidth(2.0);
+        cr.setSourceRgba(0.08, 0.10, 0.12, 0.88);
+        cr.moveTo(20.0, 42.0);
+        cr.curveTo(24.0, 46.0, 32.0, 46.0, 36.0, 42.0);
+        cr.stroke();
+
+        cr.setLineWidth(3.0);
+        cr.setSourceRgba(0.22, 0.82, 0.74, 0.95);
+        cr.moveTo(28.0, 8.0);
+        cr.lineTo(28.0, 2.5);
+        cr.stroke();
+        cr.arc(28.0, 2.5, 2.5, 0.0, tau);
+        cr.fill();
+    }
+
     /// Show Familiar's current comment as a short-lived character overlay.
     pub fn showFamiliar(self: *Self) bool {
         const alloc = Application.default().allocator();
-        const message = self.familiarSpeechText(alloc) catch |err| message: {
+        const speech = self.familiarSpeech(alloc) catch |err| message: {
             log.warn("unable to read Familiar speech err={}", .{err});
-            break :message alloc.dupeZ(u8, "I'm here, but Familiar did not answer.") catch return false;
+            break :message FamiliarSpeech{
+                .text = alloc.dupeZ(u8, "I'm here, but Familiar did not answer.") catch return false,
+                .ttl_ms = 8 * std.time.ms_per_s,
+            };
         };
-        defer alloc.free(message);
+        defer alloc.free(speech.text);
 
-        self.showFamiliarMessage(message);
+        self.showFamiliarMessage(speech);
         return true;
     }
 
-    fn showFamiliarMessage(self: *Self, message: [:0]const u8) void {
+    fn showFamiliarMessage(self: *Self, speech: FamiliarSpeech) void {
         const priv = self.private();
 
         if (priv.familiar_overlay_timer) |timer| {
@@ -1133,17 +1224,30 @@ pub const Surface = extern struct {
             }
             priv.familiar_overlay_timer = null;
         }
+        if (priv.familiar_motion_timer) |timer| {
+            if (glib.Source.remove(timer) == 0) {
+                log.warn("unable to remove Familiar motion timer", .{});
+            }
+            priv.familiar_motion_timer = null;
+        }
 
-        priv.familiar_message.setLabel(message);
+        priv.familiar_motion_step = 0;
+        self.positionFamiliarOverlay(0);
+        priv.familiar_message.setLabel(speech.text);
         priv.familiar_overlay.as(gtk.Widget).setVisible(@intFromBool(true));
+        priv.familiar_motion_timer = glib.timeoutAdd(
+            160,
+            familiarMotionTimer,
+            self,
+        );
         priv.familiar_overlay_timer = glib.timeoutAdd(
-            8 * std.time.ms_per_s,
+            speech.ttl_ms,
             familiarOverlayTimer,
             self,
         );
     }
 
-    fn familiarSpeechText(self: *Self, alloc: Allocator) ![:0]u8 {
+    fn familiarSpeech(self: *Self, alloc: Allocator) !FamiliarSpeech {
         const pwd = self.private().pwd;
         return runFamiliarSpeak(
             alloc,
@@ -1159,18 +1263,18 @@ pub const Surface = extern struct {
         alloc: Allocator,
         exe: []const u8,
         pwd: ?[:0]const u8,
-    ) ![:0]u8 {
+    ) !FamiliarSpeech {
         const result = if (pwd) |cwd|
             try std.process.Child.run(.{
                 .allocator = alloc,
-                .argv = &.{ exe, "speak", "--client", "ghostty", "--cwd", cwd },
-                .max_output_bytes = 4096,
+                .argv = &.{ exe, "speak", "--client", "ghostty", "--cwd", cwd, "--format", "json" },
+                .max_output_bytes = 8192,
             })
         else
             try std.process.Child.run(.{
                 .allocator = alloc,
-                .argv = &.{ exe, "speak", "--client", "ghostty" },
-                .max_output_bytes = 4096,
+                .argv = &.{ exe, "speak", "--client", "ghostty", "--format", "json" },
+                .max_output_bytes = 8192,
             });
         defer alloc.free(result.stdout);
         defer alloc.free(result.stderr);
@@ -1182,7 +1286,58 @@ pub const Surface = extern struct {
 
         const trimmed = std.mem.trim(u8, result.stdout, " \t\r\n");
         if (trimmed.len == 0) return error.FamiliarEmpty;
-        return alloc.dupeZ(u8, trimmed[0..@min(trimmed.len, 240)]);
+        return parseFamiliarSpeech(alloc, trimmed) catch |err| fallback: {
+            log.debug("unable to parse Familiar JSON payload err={}", .{err});
+            break :fallback FamiliarSpeech{
+                .text = try alloc.dupeZ(u8, trimmed[0..@min(trimmed.len, 240)]),
+                .ttl_ms = 8 * std.time.ms_per_s,
+            };
+        };
+    }
+
+    fn parseFamiliarSpeech(alloc: Allocator, raw: []const u8) !FamiliarSpeech {
+        const parsed = try std.json.parseFromSlice(
+            std.json.Value,
+            alloc,
+            raw,
+            .{},
+        );
+        defer parsed.deinit();
+
+        const root = parsed.value.object;
+        const text = root.get("text").?.string;
+        const ttl_ms = ttl: {
+            const value = root.get("ttl_ms") orelse break :ttl 10 * std.time.ms_per_s;
+            if (value != .integer) break :ttl 10 * std.time.ms_per_s;
+            const clamped = std.math.clamp(value.integer, 2 * std.time.ms_per_s, 30 * std.time.ms_per_s);
+            break :ttl @as(u32, @intCast(clamped));
+        };
+
+        return .{
+            .text = try alloc.dupeZ(u8, text[0..@min(text.len, 240)]),
+            .ttl_ms = ttl_ms,
+        };
+    }
+
+    fn positionFamiliarOverlay(self: *Self, step: usize) void {
+        const priv = self.private();
+        const pos = familiar_overlay_positions[step % familiar_overlay_positions.len];
+        const overlay = priv.familiar_overlay.as(gtk.Widget);
+        overlay.setHalign(pos.halign);
+        overlay.setValign(pos.valign);
+        overlay.setMarginTop(pos.margin_top);
+        overlay.setMarginBottom(pos.margin_bottom);
+        overlay.setMarginStart(pos.margin_start);
+        overlay.setMarginEnd(pos.margin_end);
+        priv.familiar_avatar.as(gtk.Widget).queueDraw();
+    }
+
+    fn familiarMotionTimer(ud: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(ud.?));
+        const priv = self.private();
+        priv.familiar_motion_step +%= 1;
+        self.positionFamiliarOverlay(priv.familiar_motion_step);
+        return @intFromBool(glib.SOURCE_CONTINUE);
     }
 
     /// The Familiar overlay has been visible long enough; remove it.
@@ -1190,6 +1345,12 @@ pub const Surface = extern struct {
         const self: *Self = @ptrCast(@alignCast(ud.?));
         const priv = self.private();
         priv.familiar_overlay_timer = null;
+        if (priv.familiar_motion_timer) |timer| {
+            if (glib.Source.remove(timer) == 0) {
+                log.warn("unable to remove Familiar motion timer", .{});
+            }
+            priv.familiar_motion_timer = null;
+        }
         priv.familiar_overlay.as(gtk.Widget).setVisible(@intFromBool(false));
         return @intFromBool(glib.SOURCE_REMOVE);
     }
@@ -1899,6 +2060,7 @@ pub const Surface = extern struct {
 
         // Setup properties we can't set from our Blueprint file.
         self.as(gtk.Widget).setCursorFromName("text");
+        priv.familiar_avatar.setDrawFunc(familiarAvatarDraw, self, null);
 
         // Initialize our config
         self.propConfig(undefined, null);
@@ -1960,6 +2122,12 @@ pub const Surface = extern struct {
                 log.warn("unable to remove Familiar overlay timer", .{});
             }
             priv.familiar_overlay_timer = null;
+        }
+        if (priv.familiar_motion_timer) |timer| {
+            if (glib.Source.remove(timer) == 0) {
+                log.warn("unable to remove Familiar motion timer", .{});
+            }
+            priv.familiar_motion_timer = null;
         }
 
         if (priv.idle_rechild) |v| {
@@ -3695,6 +3863,7 @@ pub const Surface = extern struct {
             class.bindTemplateChildPrivate("search_overlay", .{});
             class.bindTemplateChildPrivate("key_state_overlay", .{});
             class.bindTemplateChildPrivate("familiar_overlay", .{});
+            class.bindTemplateChildPrivate("familiar_avatar", .{});
             class.bindTemplateChildPrivate("familiar_message", .{});
             class.bindTemplateChildPrivate("terminal_page", .{});
             class.bindTemplateChildPrivate("drop_target", .{});
